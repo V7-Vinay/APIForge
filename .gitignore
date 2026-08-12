@@ -41,4 +41,5 @@ redis_data/
 
 # Phase source directories (prevent committing source zips/exports)
 apiforge-phase*/
+APIForge-Phase*/
 

@@ -11,6 +11,9 @@ from app.models import (
     Workspace,
     WorkspaceMember,
     WorkspaceInvitation,
+    Collection,
+    Folder,
+    APIRequest,
 )
 
 config = context.config

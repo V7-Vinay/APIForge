@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title=settings.APP_NAME,
-    version="0.3.0",
+    version="0.4.0",
     description="APIForge collaborative API development platform.",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -42,6 +42,6 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 async def root() -> dict[str, str]:
     return {
         "name": settings.APP_NAME,
-        "version": "0.3.0",
+        "version": "0.4.0",
         "status": "running",
     }

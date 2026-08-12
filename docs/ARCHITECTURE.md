@@ -66,7 +66,13 @@ The project currently contains core infrastructure, security layers, and multi-t
   - Enforces strict email verification on acceptance: the accepting user's logged-in email must match the invitation target email exactly.
   - Guarantees transaction-backed integrity when creating workspace memberships.
 
-
+### Phase 4 — Collections & API Request Definitions
+- **Collections CRUD**: Hierarchical logical grouping of API requests. Creator/Editor roles can manage collections.
+- **Nested Folders**: Allows directories inside collections, protecting against circular loops or cross-collection placement during re-assignment.
+- **API Request Definitions**: Persistence of name, HTTP method, URL, headers, query parameters, body, and authentication config (None, Bearer, Basic).
+- **Deterministic Positioning**: Supports frontend position indexing for collections, folders, and requests reordering.
+- **Tenant Isolation & RBAC checks**: Restricts resource access to users belonging to the parent workspace, enforcing strict role capabilities (VIEWERs cannot write or edit; EDITORs/ADMINs/OWNERs can mutate).
+- **Initial Request-Builder UI**: SPA dashboard supporting workspace select, collection management, folder creation, request listing, and side-by-side edit panel.
 
 ---
 
@@ -106,17 +112,39 @@ The project currently contains core infrastructure, security layers, and multi-t
 | POST | `/api/v1/workspaces/{workspace_id}/invitations` | Create a workspace invitation | Authenticated + Member (ADMIN+) |
 | POST | `/api/v1/invitations/{token}/accept` | Accept a workspace invitation | Authenticated (matching email) |
 
+### Collections, Folders & Requests Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| POST | `/api/v1/workspaces/{workspace_id}/collections` | Create a collection | Authenticated + Member (ADMIN+) |
+| GET | `/api/v1/workspaces/{workspace_id}/collections` | List workspace collections | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/collections/{id}` | Get collection details | Authenticated + Member (VIEWER+) |
+| PATCH | `/api/v1/collections/{id}` | Update collection details | Authenticated + Member (ADMIN+) |
+| DELETE | `/api/v1/collections/{id}` | Delete collection | Authenticated + Member (ADMIN+) |
+| PATCH | `/api/v1/collections/{id}/reorder` | Update collection position index | Authenticated + Member (ADMIN+) |
+| POST | `/api/v1/collections/{id}/folders` | Create a folder in a collection | Authenticated + Member (ADMIN+) |
+| GET | `/api/v1/collections/{id}/folders` | List folders in a collection | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/folders/{id}` | Get folder details | Authenticated + Member (VIEWER+) |
+| PATCH | `/api/v1/folders/{id}` | Update folder details (name/parent) | Authenticated + Member (ADMIN+) |
+| DELETE | `/api/v1/folders/{id}` | Delete folder (children moved to root) | Authenticated + Member (ADMIN+) |
+| PATCH | `/api/v1/folders/{id}/reorder` | Update folder position index | Authenticated + Member (ADMIN+) |
+| POST | `/api/v1/collections/{id}/requests` | Create request definition in collection | Authenticated + Member (EDITOR+) |
+| GET | `/api/v1/collections/{id}/requests` | List requests in a collection | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/requests/{id}` | Get request definition details | Authenticated + Member (VIEWER+) |
+| PATCH | `/api/v1/requests/{id}` | Update request details | Authenticated + Member (EDITOR+) |
+| DELETE | `/api/v1/requests/{id}` | Delete request definition | Authenticated + Member (EDITOR+) |
+| PATCH | `/api/v1/requests/{id}/reorder` | Update request position index | Authenticated + Member (EDITOR+) |
+
 ---
 
-## 4. Excluded Scope (Roadmap for Phase 4+)
+## 4. Excluded Scope (Roadmap for Phase 5+)
 
-To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 4+:
+To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 5+:
 
-1. **Collections**: Logical groupings of API requests.
-2. **API Requests**: Request builder with customizable HTTP methods, headers, parameters, and bodies.
-3. **Environments**: Variable management (e.g., base URL, auth keys) for API request testing.
-4. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
+1. **Environments**: Variable management (e.g. base URL, auth keys) for API request testing.
+2. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses (Phase 6).
+3. **SSRF/Network Validation**: Whitelisting/blacklisting IP ranges or domains to prevent Server-Side Request Forgery.
+4. **Execution History**: Persisting execution logs, response time stats, headers and body for auditability.
 5. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
-6. **Audit Logging**: Structured log record of actions performed on workspace resources.
+6. **Search & Auto-Documentation**: Global search over requests/collections and OpenAPI-compatible schema documentation generation.
 
 

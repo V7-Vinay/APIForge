@@ -2,6 +2,15 @@
 
 All notable changes to the APIForge project will be documented in this file.
 
+## [0.4.0] - 2026-08-12
+### Added
+- **Collections CRUD**: Introduced collections inside workspaces with positional sorting.
+- **Nested Folders**: Added hierarchical folder trees with protection against circular parents and invalid multi-tenant collection assignments.
+- **API Request Definitions**: Implemented persistent REST definitions storing headers, query params, request bodies, and auth configurations.
+- **Hierarchical Authorization Validation**: Enforced that access checks traverse up to the collection's owning workspace and check the active member's role capabilities.
+- **Initial Request-Builder UI**: Designed a comprehensive React sidebar panel showing workspaces, collections, folders, and request listings with an interactive definition editor.
+- **Alembic Database Migration**: Created sequential schema migration `0004_collections_requests` establishing primary database tables and foreign keys.
+
 ## [0.3.1] - 2026-08-12
 ### Added
 - **Workspace Member Invitations**: Introduced secure, email-scoped workspace invitation flows.
