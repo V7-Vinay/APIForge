@@ -2,6 +2,16 @@
 
 All notable changes to the APIForge project will be documented in this file.
 
+## [0.3.1] - 2026-08-12
+### Added
+- **Workspace Member Invitations**: Introduced secure, email-scoped workspace invitation flows.
+- **Secure Token Hashing**: Added cryptographic generation of random token IDs, persisting only their SHA-256 hashes.
+- **Invitations API Routing**: Exposed creation (`POST /api/v1/workspaces/{id}/invitations`) and acceptance (`POST /api/v1/invitations/{token}/accept`) endpoints.
+- **Invitation Validation Constraints**: Rejected duplicate memberships, duplicate pending invitations, and assignments to the `OWNER` role.
+- **Security Check rules**: Enforced that the logged-in email of the accepting user must exactly match the invitation email (returns 403 on mismatch).
+- **Alembic Migration**: Created DB migration `0003_invitations` to set up the `invitations` table with foreign key constraints.
+- **Mocks Test Suite**: Wrote mock unit tests in `backend/tests/test_invitations.py` verifying E2E Happy/Unhappy path security boundaries.
+
 ## [0.3.0] - 2026-08-12
 ### Added
 - **Multi-Tenant Workspaces**: Implemented workspaces uniquely identified by UUID and custom URL-friendly slug.

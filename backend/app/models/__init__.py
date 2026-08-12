@@ -3,6 +3,7 @@ from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.models.workspace import Workspace, WorkspaceRole
 from app.models.workspace_member import WorkspaceMember
+from app.models.invitation import WorkspaceInvitation
 
 __all__ = [
     "Base",
@@ -11,4 +12,5 @@ __all__ = [
     "Workspace",
     "WorkspaceRole",
     "WorkspaceMember",
+    "WorkspaceInvitation",
 ]

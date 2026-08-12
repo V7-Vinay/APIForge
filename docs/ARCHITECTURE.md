@@ -59,6 +59,13 @@ The project currently contains core infrastructure, security layers, and multi-t
 - **Tenant Isolation**:
   - Strong backend verification resolving membership based on the authenticated user ID and workspace ID.
   - Unauthorized workspace access attempts return `404 Not Found` to prevent metadata leakage.
+- **Workspace Member Invitations**:
+  - Secure invitation flow allowing `OWNER` or `ADMIN` members to invite new workspace collaborators by email.
+  - Generates a cryptographically random token, storing only its SHA-256 hash in the database.
+  - Restricts invitations to valid collaborator roles (`ADMIN`, `EDITOR`, `VIEWER`); direct `OWNER` assignment via invitation is blocked.
+  - Enforces strict email verification on acceptance: the accepting user's logged-in email must match the invitation target email exactly.
+  - Guarantees transaction-backed integrity when creating workspace memberships.
+
 
 
 ---
@@ -93,17 +100,23 @@ The project currently contains core infrastructure, security layers, and multi-t
 | PATCH | `/api/v1/workspaces/{id}/members/{user_id}` | Change member role | Authenticated + Member (ADMIN+) |
 | DELETE | `/api/v1/workspaces/{id}/members/{user_id}` | Remove member from workspace | Authenticated + Member (ADMIN+) |
 
+### Invitation Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| POST | `/api/v1/workspaces/{workspace_id}/invitations` | Create a workspace invitation | Authenticated + Member (ADMIN+) |
+| POST | `/api/v1/invitations/{token}/accept` | Accept a workspace invitation | Authenticated (matching email) |
+
 ---
 
 ## 4. Excluded Scope (Roadmap for Phase 4+)
 
 To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 4+:
 
-1. **Invitations**: Invite-to-workspace flow with secure emails and link handling.
-2. **Collections**: Logical groupings of API requests.
-3. **API Requests**: Request builder with customizable HTTP methods, headers, parameters, and bodies.
-4. **Environments**: Variable management (e.g., base URL, auth keys) for API request testing.
-5. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
-6. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
-7. **Audit Logging**: Structured log record of actions performed on workspace resources.
+1. **Collections**: Logical groupings of API requests.
+2. **API Requests**: Request builder with customizable HTTP methods, headers, parameters, and bodies.
+3. **Environments**: Variable management (e.g., base URL, auth keys) for API request testing.
+4. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
+5. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
+6. **Audit Logging**: Structured log record of actions performed on workspace resources.
+
 

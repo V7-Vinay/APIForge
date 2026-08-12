@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     COOKIE_SAMESITE: str = "lax"
     JWT_SECRET_KEY: str = "dev-secret-change-this"
     JWT_ALGORITHM: str = "HS256"
+    INVITATION_EXPIRE_DAYS: int = 7
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
