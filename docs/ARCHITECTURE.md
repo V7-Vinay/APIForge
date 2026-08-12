@@ -28,12 +28,12 @@ APIForge is built as a production-ready, full-stack application leveraging moder
 
 ---
 
-## 2. Completed Scope (Phases 1 & 2)
+## 2. Completed Scope (Phases 1, 2 & 3)
 
-The project currently contains all core infrastructure and basic security layers:
+The project currently contains core infrastructure, security layers, and multi-tenant workspace management:
 
 ### Phase 1 — Infrastructure
-- **Docker Integration**: Multi-container setup with Postgres, Redis, backend (FastAPI), and frontend (React) services.
+- **Docker Integration**: Multi-container setup with Postgres, Redis, backend (FastAPI), frontend (React) services, and Adminer DB viewer.
 - **Connectivity & Monitoring**: Built-in health check and dependency readiness verification endpoints:
   - `/api/v1/health` checks backend process health.
   - `/api/v1/ready` checks relational database (Postgres) and caching layer (Redis) readiness.
@@ -48,6 +48,18 @@ The project currently contains all core infrastructure and basic security layers
   - Every refresh token usage rotates the token pair and checks for token reuse (revoking the entire token family if theft is detected).
   - Explicit logout revokes the current refresh token from Postgres and clears cookies.
 - **Database Migrations**: Automatic table generation (`users` and `refresh_tokens` tables) via Alembic during container startup.
+
+### Phase 3 — Multi-Tenant Workspaces & RBAC
+- **Workspaces & Membership**:
+  - Dedicated logical boundaries for user collaboration. Workspaces are uniquely identified by a slug and a UUID.
+  - Creator of the workspace is automatically designated as the `OWNER`.
+- **Role-Based Access Control (RBAC)**:
+  - Centralized role-to-permission mapping (`app/core/permissions.py`) with roles: `OWNER`, `ADMIN`, `EDITOR`, `VIEWER`.
+  - Roles govern capabilities like member management, resource creation/editing, and read-only views.
+- **Tenant Isolation**:
+  - Strong backend verification resolving membership based on the authenticated user ID and workspace ID.
+  - Unauthorized workspace access attempts return `404 Not Found` to prevent metadata leakage.
+
 
 ---
 
@@ -69,16 +81,29 @@ The project currently contains all core infrastructure and basic security layers
 | POST | `/api/v1/auth/logout` | Revoke token family and clear cookies | Public |
 | GET | `/api/v1/auth/me` | Fetch active user information | Authenticated (JWT) |
 
+### Workspace Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| POST | `/api/v1/workspaces` | Create a new workspace | Authenticated (JWT) |
+| GET | `/api/v1/workspaces` | List active user's workspaces | Authenticated (JWT) |
+| GET | `/api/v1/workspaces/{id}` | Get workspace details | Authenticated + Member (VIEWER+) |
+| PATCH | `/api/v1/workspaces/{id}` | Update workspace details (name) | Authenticated + Member (ADMIN+) |
+| DELETE | `/api/v1/workspaces/{id}` | Delete workspace | Authenticated + Owner |
+| GET | `/api/v1/workspaces/{id}/members` | List workspace members | Authenticated + Member (VIEWER+) |
+| PATCH | `/api/v1/workspaces/{id}/members/{user_id}` | Change member role | Authenticated + Member (ADMIN+) |
+| DELETE | `/api/v1/workspaces/{id}/members/{user_id}` | Remove member from workspace | Authenticated + Member (ADMIN+) |
+
 ---
 
-## 4. Excluded Scope (Roadmap for Phase 3+)
+## 4. Excluded Scope (Roadmap for Phase 4+)
 
-To maintain a clean separation of concerns, the following features have been **deliberately excluded** from the current implementation and are earmarked for Phase 3:
+To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 4+:
 
-1. **Workspaces**: Dedicated team boundaries and collaborative settings.
-2. **Role-Based Access Control (RBAC)**: Fine-grained permissions (Owners, Editors, Viewers) per workspace.
-3. **Collections**: Logical groupings of API requests.
-4. **API Requests**: Request builder with customizable HTTP methods, headers, parameters, and bodies.
-5. **Environments**: Variable management (e.g., base URL, auth keys) for API request testing.
-6. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
-7. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
+1. **Invitations**: Invite-to-workspace flow with secure emails and link handling.
+2. **Collections**: Logical groupings of API requests.
+3. **API Requests**: Request builder with customizable HTTP methods, headers, parameters, and bodies.
+4. **Environments**: Variable management (e.g., base URL, auth keys) for API request testing.
+5. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
+6. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
+7. **Audit Logging**: Structured log record of actions performed on workspace resources.
+

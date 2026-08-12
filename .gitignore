@@ -40,5 +40,5 @@ postgres_data/
 redis_data/
 
 # Phase source directories (prevent committing source zips/exports)
-apiforge-phase1/
-apiforge-phase2/
+apiforge-phase*/
+

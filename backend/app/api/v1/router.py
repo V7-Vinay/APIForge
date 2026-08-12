@@ -2,11 +2,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
 from app.api.v1.auth import router as auth_router
+from app.api.v1.workspaces import router as workspace_router
 from app.core.database import engine
 from app.core.redis import get_redis
 
 api_router = APIRouter()
 api_router.include_router(auth_router)
+api_router.include_router(workspace_router)
 
 
 @api_router.get("/health", tags=["system"])
