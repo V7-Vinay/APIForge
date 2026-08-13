@@ -534,3 +534,116 @@ async def test_execute_response_content_types(client: AsyncClient):
             assert data["body"] is None  # Body omitted for binary types
             assert data["content_type"] == "image/png"
             assert data["response_size_bytes"] == len(png_bytes)
+
+
+@pytest.mark.anyio
+async def test_execution_history_recording_and_retrieval(client: AsyncClient):
+    """
+    Verifies that execution history is recorded for both success and failure execution paths,
+    and that GET /requests/{request_id}/history retrieves the history correctly enforcing tenant permissions.
+    """
+    owner_email = f"owner_{uuid.uuid4().hex[:6]}@example.com"
+    headers_owner, _ = await register_and_login(client, "Owner User", owner_email)
+
+    other_email = f"other_{uuid.uuid4().hex[:6]}@example.com"
+    headers_other, _ = await register_and_login(client, "Other User", other_email)
+
+    # 1. Create Workspace
+    ws_res = await client.post(
+        "/api/v1/workspaces",
+        json={"name": "Workspace A", "slug": f"ws-{uuid.uuid4().hex[:6]}"},
+        headers=headers_owner,
+    )
+    ws_id = ws_res.json()["id"]
+
+    # 2. Create Collection and Request
+    col_res = await client.post(
+        f"/api/v1/workspaces/{ws_id}/collections",
+        json={"name": "Collection A"},
+        headers=headers_owner,
+    )
+    col_id = col_res.json()["id"]
+
+    req_res = await client.post(
+        f"/api/v1/collections/{col_id}/requests",
+        json={
+            "name": "History Test Request",
+            "method": "POST",
+            "url": "https://api.external.com/data",
+            "body": '{"payload": "test"}',
+        },
+        headers=headers_owner,
+    )
+    req_id = req_res.json()["id"]
+
+    # 3. Setup mock upstream responses
+    original_request = httpx.AsyncClient.request
+    mock_resp = httpx.Response(
+        201,
+        content=b"Created Object",
+        headers={"Content-Type": "text/plain", "X-Server": "MockServer"},
+    )
+
+    async def conditional_request(self, method, url, *args, **kwargs):
+        if str(url).startswith("/") or "127.0.0.1" in str(url):
+            return await original_request(self, method, url, *args, **kwargs)
+        return mock_resp
+
+    # 4. Perform successful request execution
+    with patch("httpx.AsyncClient.request", new=conditional_request):
+        with patch("app.services.execution._resolve_public_ips") as mock_dns:
+            mock_dns.return_value = ["93.184.215.14"]
+            res = await client.post(
+                f"/api/v1/requests/{req_id}/execute",
+                json={"environment_id": None},
+                headers=headers_owner,
+            )
+            assert res.status_code == 200
+            assert res.json()["success"] is True
+
+    # 5. Perform failed request execution (SSRF block)
+    from app.services.execution import ExecutionRuleError
+
+    with patch("app.services.execution._resolve_public_ips") as mock_dns:
+        mock_dns.side_effect = ExecutionRuleError(
+            "SSRF_BLOCKED",
+            "Requests to private or local network addresses are blocked.",
+            403,
+        )
+        res = await client.post(
+            f"/api/v1/requests/{req_id}/execute",
+            json={"environment_id": None},
+            headers=headers_owner,
+        )
+        assert res.status_code == 200
+        assert res.json()["success"] is False
+        assert res.json()["error_code"] == "SSRF_BLOCKED"
+
+    # 6. Retrieve execution history as Owner (Success)
+    history_res = await client.get(
+        f"/api/v1/requests/{req_id}/history",
+        headers=headers_owner,
+    )
+    assert history_res.status_code == 200
+    history_list = history_res.json()
+    assert len(history_list) == 2
+
+    # Most recent execution should be the SSRF failure
+    latest = history_list[0]
+    assert latest["success"] is False
+    assert latest["error_code"] == "SSRF_BLOCKED"
+    assert latest["status_code"] is None
+
+    # First execution should be the successful mock
+    earlier = history_list[1]
+    assert earlier["success"] is True
+    assert earlier["status_code"] == 201
+    assert earlier["response_body"] == "Created Object"
+    assert earlier["response_headers"].get("x-server") == "MockServer"
+
+    # 7. Retrieve execution history as unauthorized user (Access rejection)
+    other_history_res = await client.get(
+        f"/api/v1/requests/{req_id}/history",
+        headers=headers_other,
+    )
+    assert other_history_res.status_code == 404

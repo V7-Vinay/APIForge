@@ -10,11 +10,17 @@ from app.core.permissions import Permission, role_has_permission
 from app.models.api_request import APIRequest
 from app.models.collection import Collection
 from app.models.environment import Environment
+from app.models.execution_history import ExecutionHistory
 from app.models.user import User
 from app.models.workspace import WorkspaceRole
 from app.models.workspace_member import WorkspaceMember
 from app.schemas.execution import ExecuteRequest, ExecutionResponse
-from app.services.execution import ExecutionRuleError, execute_request
+from app.schemas.execution_history import ExecutionHistoryResponse
+from app.services.execution import (
+    ExecutionRuleError,
+    execute_request,
+    record_execution_history,
+)
 
 router = APIRouter(tags=["execution"])
 
@@ -73,21 +79,85 @@ async def execute_request_endpoint(
         if membership is None:
             raise HTTPException(status_code=404, detail="Environment not found.")
 
+    collection = await session.get(Collection, request.collection_id)
     try:
         result = await execute_request(
-            session, request=request, environment=environment
+            session,
+            request=request,
+            environment=environment,
+            workspace_id=collection.workspace_id,
+            user_id=current_user.id,
         )
     except ExecutionRuleError as exc:
+        await record_execution_history(
+            session,
+            request=request,
+            workspace_id=collection.workspace_id,
+            user_id=current_user.id,
+            environment=environment,
+            result={
+                "success": False,
+                "method": request.method,
+                "url": request.url,
+                "status_code": None,
+                "headers": {},
+                "body": None,
+                "content_type": None,
+                "response_size_bytes": 0,
+                "duration_ms": None,
+                "error_code": exc.code,
+                "error_message": str(exc),
+            },
+        )
         return ExecutionResponse(
             success=False,
             error_code=exc.code,
             error_message=str(exc),
         )
     except Exception:
-        # Never leak upstream/client internals to API consumers.
+        await record_execution_history(
+            session,
+            request=request,
+            workspace_id=collection.workspace_id,
+            user_id=current_user.id,
+            environment=environment,
+            result={
+                "success": False,
+                "method": request.method,
+                "url": request.url,
+                "status_code": None,
+                "headers": {},
+                "body": None,
+                "content_type": None,
+                "response_size_bytes": 0,
+                "duration_ms": None,
+                "error_code": "EXECUTION_ERROR",
+                "error_message": "The request could not be executed.",
+            },
+        )
         return ExecutionResponse(
             success=False,
             error_code="EXECUTION_ERROR",
             error_message="The request could not be executed.",
         )
     return ExecutionResponse(**result)
+
+
+@router.get(
+    "/requests/{request_id}/history", response_model=list[ExecutionHistoryResponse]
+)
+async def list_request_history(
+    request_id: uuid.UUID,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    request = await _authorized_request(session, request_id, current_user.id)
+    limit = max(1, min(limit, 100))
+    result = await session.scalars(
+        select(ExecutionHistory)
+        .where(ExecutionHistory.request_id == request.id)
+        .order_by(ExecutionHistory.created_at.desc())
+        .limit(limit)
+    )
+    return list(result)

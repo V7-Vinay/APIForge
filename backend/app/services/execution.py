@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.api_request import APIRequest
 from app.models.environment import Environment
+from app.models.execution_history import ExecutionHistory
 from app.services.environments import resolve_variables
 
 
@@ -255,8 +256,43 @@ async def _read_response(response: httpx.Response) -> tuple[str | None, str, int
     )
 
 
+async def record_execution_history(
+    session: AsyncSession,
+    *,
+    request: APIRequest,
+    workspace_id,
+    user_id,
+    environment: Environment | None,
+    result: dict,
+) -> None:
+    history = ExecutionHistory(
+        request_id=request.id,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        environment_id=environment.id if environment else None,
+        method=result.get("method", request.method),
+        url=result.get("url", request.url),
+        status_code=result.get("status_code"),
+        success=result.get("success", False),
+        duration_ms=result.get("duration_ms"),
+        response_size_bytes=result.get("response_size_bytes", 0),
+        response_headers=result.get("headers", {}),
+        response_body=result.get("body"),
+        content_type=result.get("content_type"),
+        error_code=result.get("error_code"),
+        error_message=result.get("error_message"),
+    )
+    session.add(history)
+    await session.commit()
+
+
 async def execute_request(
-    session: AsyncSession, *, request: APIRequest, environment: Environment | None
+    session: AsyncSession,
+    *,
+    request: APIRequest,
+    environment: Environment | None,
+    workspace_id=None,
+    user_id=None,
 ) -> dict:
     resolved = await resolve_request(session, request=request, environment=environment)
     current_url = _validate_url(resolved.url)
@@ -322,8 +358,10 @@ async def execute_request(
         body, content_type, response_size, is_text = await _read_response(response)
 
     duration_ms = round((time.perf_counter() - started) * 1000, 2)
-    return {
+    result = {
         "success": True,
+        "method": resolved.method,
+        "url": current_url,
         "status_code": response.status_code,
         "headers": _redact_headers(dict(response.headers)),
         "body": body,
@@ -335,3 +373,13 @@ async def execute_request(
         "error_code": None,
         "error_message": None,
     }
+    if workspace_id is not None and user_id is not None:
+        await record_execution_history(
+            session,
+            request=request,
+            workspace_id=workspace_id,
+            user_id=user_id,
+            environment=environment,
+            result=result,
+        )
+    return result
