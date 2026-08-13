@@ -74,6 +74,14 @@ The project currently contains core infrastructure, security layers, and multi-t
 - **Tenant Isolation & RBAC checks**: Restricts resource access to users belonging to the parent workspace, enforcing strict role capabilities (VIEWERs cannot write or edit; EDITORs/ADMINs/OWNERs can mutate).
 - **Initial Request-Builder UI**: SPA dashboard supporting workspace select, collection management, folder creation, request listing, and side-by-side edit panel.
 
+### Phase 5 — Environment Management
+- **Workspace Environments**: Introduced workspace-scoped environments (e.g. Development, Production) to configure workspace-wide request scopes.
+- **Encrypted Variables at Rest**: Implemented secure Fernet cryptography to automatically encrypt secret values in PostgreSQL.
+- **Variable Placeholders & Resolution**: Created parser targeting `{{VARIABLE_NAME}}` format to substitute variables, masking secret variables (`********`) except under a secure reveal endpoint.
+- **Workspace Isolation & RBAC**: Enforced checks rejecting cross-workspace environment access and requiring write/edit access roles for mutating variables.
+- **Alembic Database Migration**: Added migration version `0005_environments` setting up relational environments tables.
+- **React Frontend Selector**: Connected environment and variable select/add actions to the header topbar and sidebar panels.
+
 ---
 
 ## 3. API Endpoints
@@ -134,17 +142,32 @@ The project currently contains core infrastructure, security layers, and multi-t
 | DELETE | `/api/v1/requests/{id}` | Delete request definition | Authenticated + Member (EDITOR+) |
 | PATCH | `/api/v1/requests/{id}/reorder` | Update request position index | Authenticated + Member (EDITOR+) |
 
+### Environment & Variable Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| POST | `/api/v1/workspaces/{workspace_id}/environments` | Create an environment | Authenticated + Member (ADMIN+) |
+| GET | `/api/v1/workspaces/{workspace_id}/environments` | List workspace environments | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/environments/{environment_id}` | Get environment details | Authenticated + Member (VIEWER+) |
+| PATCH | `/api/v1/environments/{environment_id}` | Update environment details | Authenticated + Member (ADMIN+) |
+| DELETE | `/api/v1/environments/{environment_id}` | Delete environment | Authenticated + Member (ADMIN+) |
+| POST | `/api/v1/environments/{environment_id}/variables` | Create environment variable | Authenticated + Member (EDITOR+) |
+| GET | `/api/v1/environments/{environment_id}/variables` | List variables in environment | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/environment-variables/{variable_id}` | Get environment variable details | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/environment-variables/{variable_id}/reveal` | Reveal secret variable value | Authenticated + Member (EDITOR+) |
+| PATCH | `/api/v1/environment-variables/{variable_id}` | Update environment variable | Authenticated + Member (EDITOR+) |
+| DELETE | `/api/v1/environment-variables/{variable_id}` | Delete environment variable | Authenticated + Member (EDITOR+) |
+| POST | `/api/v1/environments/{environment_id}/resolve` | Resolve variable placeholders in text | Authenticated + Member (VIEWER+) |
+
 ---
 
-## 4. Excluded Scope (Roadmap for Phase 5+)
+## 4. Excluded Scope (Roadmap for Phase 6+)
 
-To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 5+:
+To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 6+:
 
-1. **Environments**: Variable management (e.g. base URL, auth keys) for API request testing.
-2. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses (Phase 6).
-3. **SSRF/Network Validation**: Whitelisting/blacklisting IP ranges or domains to prevent Server-Side Request Forgery.
-4. **Execution History**: Persisting execution logs, response time stats, headers and body for auditability.
-5. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
-6. **Search & Auto-Documentation**: Global search over requests/collections and OpenAPI-compatible schema documentation generation.
+1. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
+2. **SSRF/Network Validation**: Whitelisting/blacklisting IP ranges or domains to prevent Server-Side Request Forgery.
+3. **Execution History**: Persisting execution logs, response time stats, headers and body for auditability.
+4. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
+5. **Search & Auto-Documentation**: Global search over requests/collections and OpenAPI-compatible schema documentation generation.
 
 

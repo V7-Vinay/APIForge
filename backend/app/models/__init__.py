@@ -7,6 +7,7 @@ from app.models.invitation import WorkspaceInvitation
 from app.models.collection import Collection
 from app.models.folder import Folder
 from app.models.api_request import APIRequest, HTTPMethod
+from app.models.environment import Environment, EnvironmentVariable
 
 __all__ = [
     "Base",
@@ -20,4 +21,6 @@ __all__ = [
     "Folder",
     "APIRequest",
     "HTTPMethod",
+    "Environment",
+    "EnvironmentVariable",
 ]

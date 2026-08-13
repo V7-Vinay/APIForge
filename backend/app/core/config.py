@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://apiforge:apiforge_dev_password@localhost:5432/apiforge"
     )
     REDIS_URL: str = "redis://localhost:6379/0"
+    ENVIRONMENT_ENCRYPTION_KEY: str = ""
     REFRESH_COOKIE_NAME: str = "refresh_token"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30

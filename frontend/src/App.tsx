@@ -40,6 +40,22 @@ type APIRequest = {
   } | null;
   position: number;
 };
+type Environment = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type EnvironmentVariable = {
+  id: string;
+  environment_id: string;
+  key: string;
+  is_secret: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 async function api<T>(
   path: string,
@@ -88,6 +104,9 @@ export default function App() {
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [body, setBody] = useState("");
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [environmentId, setEnvironmentId] = useState("");
+  const [variables, setVariables] = useState<EnvironmentVariable[]>([]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -124,7 +143,80 @@ export default function App() {
     setWorkspaces(data);
     if (!workspaceId && data[0]) {
       setWorkspaceId(data[0].id);
-      await loadCollections(data[0].id, accessToken);
+      await Promise.all([
+        loadCollections(data[0].id, accessToken),
+        loadEnvironments(data[0].id, accessToken),
+      ]);
+    }
+  }
+
+  async function loadEnvironments(id = workspaceId, accessToken = token!) {
+    if (!id) return;
+    const data = await api<Environment[]>(
+      `/workspaces/${id}/environments`,
+      {},
+      accessToken,
+    );
+    setEnvironments(data);
+    if (data[0]) {
+      setEnvironmentId(data[0].id);
+      await loadVariables(data[0].id, accessToken);
+    } else {
+      setEnvironmentId("");
+      setVariables([]);
+    }
+  }
+
+  async function loadVariables(id = environmentId, accessToken = token!) {
+    if (!id) return;
+    const data = await api<EnvironmentVariable[]>(
+      `/environments/${id}/variables`,
+      {},
+      accessToken,
+    );
+    setVariables(data);
+  }
+
+  async function createEnvironment() {
+    if (!token || !workspaceId) return;
+    const name = window.prompt("Environment name");
+    if (!name) return;
+    try {
+      const created = await api<Environment>(
+        `/workspaces/${workspaceId}/environments`,
+        { method: "POST", body: JSON.stringify({ name }) },
+        token,
+      );
+      setEnvironments((prev) => [...prev, created]);
+      setEnvironmentId(created.id);
+      setVariables([]);
+      setMessage("Environment created.");
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "Could not create environment.",
+      );
+    }
+  }
+
+  async function createVariable() {
+    if (!token || !environmentId) return;
+    const key = window.prompt("Variable key");
+    if (!key) return;
+    const value = window.prompt(`Value for ${key}`);
+    if (value === null) return;
+    try {
+      const created = await api<EnvironmentVariable>(
+        `/environments/${environmentId}/variables`,
+        {
+          method: "POST",
+          body: JSON.stringify({ key, value, is_secret: false }),
+        },
+        token,
+      );
+      setVariables((prev) => [...prev, created]);
+      setMessage("Variable created.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not create variable.");
     }
   }
 
@@ -298,6 +390,9 @@ export default function App() {
     setUser(null);
     setWorkspaces([]);
     setCollections([]);
+    setEnvironments([]);
+    setEnvironmentId("");
+    setVariables([]);
     setSelectedRequest(null);
   }
 
@@ -376,7 +471,10 @@ export default function App() {
             value={workspaceId}
             onChange={async (e) => {
               setWorkspaceId(e.target.value);
-              await loadCollections(e.target.value);
+              await Promise.all([
+                loadCollections(e.target.value),
+                loadEnvironments(e.target.value),
+              ]);
             }}
           >
             {workspaces.map((w) => (
@@ -385,6 +483,21 @@ export default function App() {
               </option>
             ))}
           </select>
+          <select
+            value={environmentId}
+            onChange={async (e) => {
+              setEnvironmentId(e.target.value);
+              await loadVariables(e.target.value);
+            }}
+          >
+            <option value="">Environment</option>
+            {environments.map((env) => (
+              <option key={env.id} value={env.id}>
+                {env.name}
+              </option>
+            ))}
+          </select>
+          <button onClick={createEnvironment}>+ Env</button>
           <button onClick={logout}>Log out</button>
         </div>
       </header>
@@ -452,6 +565,28 @@ export default function App() {
                     ))}
                     {folders.length === 0 && (
                       <div className="muted">No folders</div>
+                    )}
+                    <div className="tree-label row-label">
+                      <span>Environment Variables</span>
+                      <button
+                        className="mini-button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          createVariable();
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                    {environmentId &&
+                      variables.map((v) => (
+                        <div className="tree-item" key={v.id}>
+                          ◆ {v.key}
+                          {v.is_secret ? " · secret" : ""}
+                        </div>
+                      ))}
+                    {environmentId && variables.length === 0 && (
+                      <div className="muted">No variables</div>
                     )}
                     <div className="tree-label row-label">
                       <span>Requests</span>

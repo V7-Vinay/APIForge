@@ -72,7 +72,7 @@ services:
     container_name: apiforge-adminer
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8085:8080"
     depends_on:
       - postgres
 

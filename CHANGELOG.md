@@ -2,6 +2,15 @@
 
 All notable changes to the APIForge project will be documented in this file.
 
+## [0.5.0] - 2026-08-13
+### Added
+- **Workspace Environments**: Introduced workspace-scoped environments (like Development, Production) to separate configurations.
+- **Variable Encryption at Rest**: Used Fernet symmetric encryption key for variables designated as secrets, persisting only ciphertext in PostgreSQL.
+- **Variable Substitution & Resolution**: Supported placeholder format `{{VARIABLE_NAME}}` to resolve strings, masking secrets with asterisks (`********`) for normal view.
+- **Tenant Isolation and RBAC**: Enforced role authorization checks on environment management and cross-workspace access attempts.
+- **Alembic Database Migration**: Added migration `0005_environments` setting up tables with cascade deletions.
+- **Frontend Environment UI**: Integrated dropdown environment selectors and variable additions within the workspace grid.
+
 ## [0.4.0] - 2026-08-12
 ### Added
 - **Collections CRUD**: Introduced collections inside workspaces with positional sorting.
