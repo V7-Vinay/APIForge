@@ -155,6 +155,8 @@ class RequestCreate(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
+        if "{{" in value:
+            return value
         parsed = AnyHttpUrl(value)
         if parsed.scheme not in {"http", "https"}:
             raise ValueError("Only HTTP and HTTPS URLs are supported.")
@@ -197,6 +199,8 @@ class RequestUpdate(BaseModel):
     def validate_optional_url(cls, value: str | None) -> str | None:
         if value is None:
             return None
+        if "{{" in value:
+            return value
         parsed = AnyHttpUrl(value)
         if parsed.scheme not in {"http", "https"}:
             raise ValueError("Only HTTP and HTTPS URLs are supported.")
