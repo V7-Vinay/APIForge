@@ -82,6 +82,13 @@ The project currently contains core infrastructure, security layers, and multi-t
 - **Alembic Database Migration**: Added migration version `0005_environments` setting up relational environments tables.
 - **React Frontend Selector**: Connected environment and variable select/add actions to the header topbar and sidebar panels.
 
+### Phase 6 — Request Execution Engine
+- **Controlled Outbound Execution**: Added `POST /api/v1/requests/{request_id}/execute` to substitute variables and issue HTTP requests.
+- **SSRF Prevention Controls**: Validates request hostnames against IP range list to reject connection attempts resolving to loopback, private, or reserved subnets.
+- **Redirect Guards**: Rejects unvalidated redirect locations.
+- **Response Bounds & Redaction**: Discards HTTP response payloads exceeding size limits, and sanitizes outgoing headers to redact secrets (`Authorization`, `Cookie`, etc.).
+- **Frontend Response Visualizer**: Connected request executions to React sidebar send actions showing timing and header diagnostics.
+
 ---
 
 ## 3. API Endpoints
@@ -141,6 +148,7 @@ The project currently contains core infrastructure, security layers, and multi-t
 | PATCH | `/api/v1/requests/{id}` | Update request details | Authenticated + Member (EDITOR+) |
 | DELETE | `/api/v1/requests/{id}` | Delete request definition | Authenticated + Member (EDITOR+) |
 | PATCH | `/api/v1/requests/{id}/reorder` | Update request position index | Authenticated + Member (EDITOR+) |
+| POST | `/api/v1/requests/{id}/execute` | Execute request definition | Authenticated + Member (EDITOR+) |
 
 ### Environment & Variable Endpoints
 | Method | Path | Description | Access |
@@ -160,14 +168,12 @@ The project currently contains core infrastructure, security layers, and multi-t
 
 ---
 
-## 4. Excluded Scope (Roadmap for Phase 6+)
+## 4. Excluded Scope (Roadmap for Phase 7+)
 
-To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 6+:
+To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 7+:
 
-1. **Request Execution**: Executing arbitrary HTTP requests from backend/frontend workers and recording responses.
-2. **SSRF/Network Validation**: Whitelisting/blacklisting IP ranges or domains to prevent Server-Side Request Forgery.
-3. **Execution History**: Persisting execution logs, response time stats, headers and body for auditability.
-4. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
-5. **Search & Auto-Documentation**: Global search over requests/collections and OpenAPI-compatible schema documentation generation.
+1. **Execution History**: Persisting execution logs, response time stats, headers and body for auditability.
+2. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
+3. **Search & Auto-Documentation**: Global search over requests/collections and OpenAPI-compatible schema documentation generation.
 
 

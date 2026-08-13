@@ -89,6 +89,8 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [message, setMessage] = useState("");
+  const [executing, setExecuting] = useState(false);
+  const [execution, setExecution] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState("");
@@ -252,6 +254,7 @@ export default function App() {
       setMethod(selectedRequest.method);
       setUrl(selectedRequest.url);
       setBody(selectedRequest.body ?? "");
+      setExecution(null);
     }
   }, [selectedRequest]);
 
@@ -383,6 +386,33 @@ export default function App() {
     }
   }
 
+  async function executeSelectedRequest() {
+    if (!token || !selectedRequest || !environmentId) {
+      setMessage("Select an environment before sending.");
+      return;
+    }
+    setExecuting(true);
+    setExecution(null);
+    setMessage("");
+    try {
+      const result = await api<any>(
+        `/requests/${selectedRequest.id}/execute`,
+        {
+          method: "POST",
+          body: JSON.stringify({ environment_id: environmentId }),
+        },
+        token,
+      );
+      setExecution(result);
+      if (!result.success)
+        setMessage(result.error_message || "Execution failed.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Execution failed.");
+    } finally {
+      setExecuting(false);
+    }
+  }
+
   async function logout() {
     if (token)
       await api("/auth/logout", { method: "POST" }, token).catch(() => {});
@@ -394,6 +424,7 @@ export default function App() {
     setEnvironmentId("");
     setVariables([]);
     setSelectedRequest(null);
+    setExecution(null);
   }
 
   const treeFolders = useMemo(
@@ -660,10 +691,10 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    disabled
-                    title="Request execution is Phase 6"
+                    onClick={executeSelectedRequest}
+                    disabled={executing || !environmentId}
                   >
-                    Send
+                    {executing ? "Sending…" : "Send"}
                   </button>
                 </div>
                 <input
@@ -690,9 +721,54 @@ export default function App() {
                   />
                 </label>
                 <div className="notice">
-                  Execution is intentionally disabled in Phase 4. The saved
-                  definition will be executed by the Phase 6 execution engine.
+                  Requests execute through the Phase 6 security-validated
+                  execution engine. Select an environment before sending.
                 </div>
+                {execution && (
+                  <section className="response-panel">
+                    <div className="response-head">
+                      <strong>
+                        {execution.success
+                          ? `${execution.status_code} ${
+                              execution.status_code >= 200 &&
+                              execution.status_code < 300
+                                ? "OK"
+                                : "HTTP Response"
+                            }`
+                          : execution.error_code}
+                      </strong>
+                      <span>
+                        {execution.duration_ms != null
+                          ? `${execution.duration_ms} ms`
+                          : ""}
+                      </span>
+                    </div>
+                    {execution.success ? (
+                      <>
+                        <div className="response-tabs">
+                          <span>Body</span>
+                          <span>Headers</span>
+                          <span>Metadata</span>
+                        </div>
+                        <pre className="response-body">
+                          {execution.body_is_text
+                            ? execution.body || "(empty response)"
+                            : `Binary response: ${execution.content_type || "unknown"} · ${execution.response_size_bytes} bytes`}
+                        </pre>
+                        <details>
+                          <summary>Headers</summary>
+                          <pre className="response-body">
+                            {JSON.stringify(execution.headers, null, 2)}
+                          </pre>
+                        </details>
+                      </>
+                    ) : (
+                      <div className="execution-error">
+                        {execution.error_message}
+                      </div>
+                    )}
+                  </section>
+                )}
               </div>
             </form>
           ) : (

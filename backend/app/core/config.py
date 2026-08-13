@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "dev-secret-change-this"
     JWT_ALGORITHM: str = "HS256"
     INVITATION_EXPIRE_DAYS: int = 7
+
+    EXECUTION_TIMEOUT_SECONDS: int = 30
+    EXECUTION_CONNECT_TIMEOUT_SECONDS: int = 10
+    EXECUTION_MAX_RESPONSE_SIZE_BYTES: int = 5000000
+    EXECUTION_MAX_REDIRECTS: int = 5
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -340,3 +340,54 @@ button:disabled {
 .mini-button {
   font-size: 0.9rem;
 }
+
+.response-panel {
+  margin: 22px 0;
+  border: 1px solid #202938;
+  border-radius: 12px;
+  background: #0b1019;
+  overflow: hidden;
+}
+
+.response-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1px solid #202938;
+}
+
+.response-tabs {
+  display: flex;
+  gap: 20px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #202938;
+  color: #8e9bb0;
+  font-size: 0.82rem;
+}
+
+.response-body {
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  max-height: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #cbd5e6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82rem;
+}
+
+.execution-error {
+  padding: 16px;
+  color: #ff9c9c;
+}
+
+details {
+  border-top: 1px solid #202938;
+}
+
+details summary {
+  padding: 10px 16px;
+  cursor: pointer;
+  color: #9eabc0;
+}

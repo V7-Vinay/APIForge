@@ -2,6 +2,14 @@
 
 All notable changes to the APIForge project will be documented in this file.
 
+## [0.6.0] - 2026-08-13
+### Added
+- **Request Execution Engine**: Added controlled outbound HTTP request execution for persisted API request definitions.
+- **SSRF and Network Protections**: Blocked outbound requests resolving to local, loopback, private, link-local, or reserved IP ranges.
+- **Secure Redirect Controls**: Implemented check-on-redirect validations restricting redirect destinations to public domains.
+- **Response Processing and Redaction**: Bounded upstream response payload sizes to prevent Denial of Service, and redacted sensitive headers (`Authorization`, `Cookie`, `x-api-key`, etc.) from execution logs.
+- **Frontend Response Panel**: Added a sidebar response visualizer showing HTTP status, execution time, body output, and redacted headers.
+
 ## [0.5.0] - 2026-08-13
 ### Added
 - **Workspace Environments**: Introduced workspace-scoped environments (like Development, Production) to separate configurations.

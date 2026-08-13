@@ -2,9 +2,9 @@
 
 APIForge is a production-oriented collaborative API development platform built using FastAPI, React, PostgreSQL, and Redis.
 
-## Status: Phase 5 Completed
+## Status: Phase 6 Completed
 
-This repository houses the merged codebase of **Phase 1 (Infrastructure)**, **Phase 2 (Authentication & Identity)**, **Phase 3 (Multi-Tenant Workspaces & RBAC)**, **Phase 4 (Collections & Request definitions)**, and **Phase 5 (Environment Management)**.
+This repository houses the merged codebase of **Phase 1 (Infrastructure)**, **Phase 2 (Authentication & Identity)**, **Phase 3 (Multi-Tenant Workspaces & RBAC)**, **Phase 4 (Collections & Request definitions)**, **Phase 5 (Environment Management)**, and **Phase 6 (Request Execution Engine)**.
 
 ### Core Features Installed:
 - **Relational Backend**: FastAPI + SQLAlchemy (Async) running on Python 3.12.
@@ -18,6 +18,8 @@ This repository houses the merged codebase of **Phase 1 (Infrastructure)**, **Ph
 - **API Request Definitions**: Persistence of HTTP headers, parameters, body payloads, and auth configurations.
 - **Workspace Environments & Variables**: Environment CRUD with values encrypted at rest using Fernet symmetric encryption.
 - **Variable Syntax & Safe Resolution**: Syntax `{{VARIABLE_NAME}}` resolved on-demand and secret values masked.
+- **Request Execution Engine**: Controlled outbound HTTP executions validating URLs, parsing variables, and returning headers/bodies.
+- **SSRF Prevention Guards**: Checks resolved host IP addresses to block connections to private, link-local, loopback, and restricted networks.
 - **Auto Migrations**: DB migrations managed via Alembic and executed on startup.
 - **Health & Readiness Endpoints**: Automated check services at `/api/v1/health` and `/api/v1/ready`.
 
@@ -54,6 +56,6 @@ Once containers are running, the application can be accessed at:
 
 Detailed architecture and structural schemas are available in [docs/ARCHITECTURE.md](file:///c:/Users/HP/Desktop/Desktop/WEB%20PROJECT/APIForge/docs/ARCHITECTURE.md).
 
-### Next Phase: Phase 6
-Phase 6 will introduce HTTP request execution, client/worker engines, SSRF/network validation, and execution history.
+### Next Phase: Phase 7
+Phase 7 will introduce execution history database logs, collections runners, and real-time WebSockets synchronization.
 
