@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type User = { id: string; name: string; email: string; created_at: string };
 type TokenResponse = {
@@ -66,14 +66,37 @@ type APIRequest = {
     token?: string;
     username?: string;
     password?: string;
+    has_credentials?: boolean;
+    has_token?: boolean;
   } | null;
   position: number;
 };
+
+type CollaborationPresence = {
+  connection_id: string;
+  user_id: string;
+  name: string;
+  request_id: string;
+  last_seen: string;
+};
+
+type CollaborationEvent = {
+  type: string;
+  actor_id?: string | null;
+  request_id?: string | null;
+  resource_id?: string | null;
+  resource_type?: string | null;
+  payload?: Record<string, any>;
+};
+
+let tokenRefreshHandler: ((newToken: string) => void) | null = null;
+let logoutHandler: (() => void) | null = null;
 
 async function api<T>(
   path: string,
   options: RequestInit = {},
   token?: string,
+  isRetry = false,
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type"))
@@ -84,11 +107,37 @@ async function api<T>(
     headers,
     credentials: "include",
   });
+  if (
+    response.status === 401 &&
+    !isRetry &&
+    path !== "/auth/refresh" &&
+    path !== "/auth/login" &&
+    path !== "/auth/register"
+  ) {
+    try {
+      const refreshResult = await api<{ access_token: string }>(
+        "/auth/refresh",
+        { method: "POST" },
+        undefined,
+        true,
+      );
+      const newToken = refreshResult.access_token;
+      if (tokenRefreshHandler) {
+        tokenRefreshHandler(newToken);
+      }
+      return await api<T>(path, options, newToken, true);
+    } catch (refreshErr) {
+      if (logoutHandler) {
+        logoutHandler();
+      }
+      throw refreshErr;
+    }
+  }
   const body = await response.json().catch(() => null);
   if (!response.ok)
     throw new Error(
-      body?.detail ??
-        body?.error?.message ??
+      body?.error?.message ??
+        body?.detail ??
         `Request failed (${response.status})`,
     );
   return body as T;
@@ -124,6 +173,24 @@ export default function App() {
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [body, setBody] = useState("");
+
+  const [activeTab, setActiveTab] = useState<
+    "params" | "headers" | "body" | "auth"
+  >("body");
+  const [authType, setAuthType] = useState("none");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authToken, setAuthToken] = useState("");
+
+  const [collaborationSocket, setCollaborationSocket] =
+    useState<WebSocket | null>(null);
+  const [collaborationReady, setCollaborationReady] = useState(false);
+  const [presence, setPresence] = useState<
+    Record<string, CollaborationPresence>
+  >({});
+  const selectedRequestRef = useRef<APIRequest | null>(null);
+  const selectedCollectionRef = useRef<Collection | null>(null);
+  const userRef = useRef<User | null>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -299,13 +366,259 @@ export default function App() {
   }
 
   useEffect(() => {
+    tokenRefreshHandler = (newToken) => {
+      setToken(newToken);
+    };
+    logoutHandler = () => {
+      logout();
+    };
+    return () => {
+      tokenRefreshHandler = null;
+      logoutHandler = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    selectedRequestRef.current = selectedRequest;
     if (selectedRequest) {
       setRequestName(selectedRequest.name);
       setMethod(selectedRequest.method);
       setUrl(selectedRequest.url);
       setBody(selectedRequest.body ?? "");
+
+      const auth = selectedRequest.auth_config || { type: "none" };
+      setAuthType(auth.type || "none");
+      setAuthUsername(auth.username || "");
+      setAuthPassword("");
+      setAuthToken("");
     }
   }, [selectedRequest]);
+
+  useEffect(() => {
+    selectedCollectionRef.current = selectedCollection;
+  }, [selectedCollection]);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    if (!token || !workspaceId) {
+      setCollaborationReady(false);
+      setPresence({});
+      collaborationSocket?.close();
+      setCollaborationSocket(null);
+      return;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(
+      `${protocol}//${window.location.host}/api/v1/workspaces/${workspaceId}/collaboration`,
+    );
+    setCollaborationSocket(socket);
+    setCollaborationReady(false);
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ type: "AUTH", token }));
+    };
+
+    socket.onmessage = async (message) => {
+      const event = JSON.parse(message.data) as CollaborationEvent;
+      const payload = event.payload ?? {};
+
+      if (event.type === "AUTHENTICATED" && payload.connection_id) {
+        setCollaborationReady(true);
+        return;
+      }
+
+      if (event.type === "PRESENCE_SNAPSHOT") {
+        const next: Record<string, CollaborationPresence> = {};
+        for (const item of (payload.users ?? []) as CollaborationPresence[]) {
+          next[item.connection_id] = item;
+        }
+        setPresence(next);
+        return;
+      }
+
+      if (event.type === "USER_JOINED_REQUEST") {
+        if (event.request_id !== selectedRequestRef.current?.id) return;
+        const joined = payload as Partial<CollaborationPresence>;
+        const connectionId = joined.connection_id;
+        const joinedUserId = joined.user_id;
+        const joinedName =
+          joined.name ?? (payload.user_name as string | undefined);
+        const joinedRequestId = event.request_id;
+        if (connectionId && joinedUserId && joinedName && joinedRequestId) {
+          setPresence((prev) => ({
+            ...prev,
+            [connectionId]: {
+              connection_id: connectionId,
+              user_id: joinedUserId,
+              name: joinedName,
+              request_id: joinedRequestId,
+              last_seen: new Date().toISOString(),
+            },
+          }));
+        }
+        return;
+      }
+
+      if (event.type === "USER_LEFT_REQUEST") {
+        if (event.request_id !== selectedRequestRef.current?.id) return;
+        setPresence((prev) => {
+          const next = { ...prev };
+          for (const [key, item] of Object.entries(next)) {
+            if (
+              item.user_id === event.actor_id &&
+              item.request_id === event.request_id
+            ) {
+              delete next[key];
+            }
+          }
+          return next;
+        });
+        return;
+      }
+
+      if (
+        event.type === "REQUEST_UPDATED" &&
+        event.actor_id !== userRef.current?.id
+      ) {
+        const action = payload.action;
+        if (event.request_id === selectedRequestRef.current?.id) {
+          if (action === "deleted") {
+            setSelectedRequest(null);
+          } else {
+            try {
+              const refreshed = await api<APIRequest>(
+                `/requests/${event.request_id}`,
+                {},
+                token,
+              );
+              setSelectedRequest(refreshed);
+              setRequests((prev) =>
+                prev.map((r) => (r.id === refreshed.id ? refreshed : r)),
+              );
+            } catch {
+              setSelectedRequest(null);
+            }
+          }
+        }
+        const activeCollectionId = selectedCollectionRef.current?.id;
+        if (
+          activeCollectionId &&
+          activeCollectionId === payload.collection_id
+        ) {
+          await loadChildren(activeCollectionId, token);
+        }
+        return;
+      }
+
+      if (
+        event.type === "COLLECTION_UPDATED" &&
+        event.actor_id !== userRef.current?.id
+      ) {
+        if (event.resource_type === "collection") {
+          await loadCollections(workspaceId, token);
+        } else {
+          const activeCollectionId = selectedCollectionRef.current?.id;
+          if (
+            activeCollectionId &&
+            activeCollectionId === payload.collection_id
+          ) {
+            await loadChildren(activeCollectionId, token);
+          }
+        }
+      }
+    };
+
+    socket.onclose = () => {
+      setCollaborationReady(false);
+      setPresence({});
+    };
+
+    return () => {
+      socket.close();
+      setCollaborationReady(false);
+      setPresence({});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, workspaceId]);
+
+  useEffect(() => {
+    if (!collaborationSocket || !collaborationReady || !selectedRequest) return;
+    collaborationSocket.send(
+      JSON.stringify({ type: "JOIN_REQUEST", request_id: selectedRequest.id }),
+    );
+    const heartbeat = window.setInterval(() => {
+      if (collaborationSocket.readyState === WebSocket.OPEN) {
+        collaborationSocket.send(JSON.stringify({ type: "PING" }));
+      }
+    }, 10000);
+    return () => {
+      window.clearInterval(heartbeat);
+      if (collaborationSocket.readyState === WebSocket.OPEN) {
+        collaborationSocket.send(JSON.stringify({ type: "LEAVE_REQUEST" }));
+      }
+      setPresence({});
+    };
+  }, [collaborationSocket, collaborationReady, selectedRequest?.id]);
+
+  async function updateAuthConfig() {
+    if (!token || !selectedRequest) return;
+    try {
+      const auth_config: any = { type: authType };
+      if (authType === "bearer") {
+        if (authToken) {
+          auth_config.token = authToken;
+        } else if (
+          selectedRequest.auth_config?.type === "bearer" &&
+          selectedRequest.auth_config?.has_token
+        ) {
+          alert("Please enter a new token value to update.");
+          return;
+        } else {
+          alert("Bearer token is required.");
+          return;
+        }
+      } else if (authType === "basic") {
+        auth_config.username = authUsername;
+        if (authPassword) {
+          auth_config.password = authPassword;
+        } else if (
+          selectedRequest.auth_config?.type === "basic" &&
+          selectedRequest.auth_config?.has_credentials
+        ) {
+          alert("Please enter a new password value to update.");
+          return;
+        } else {
+          alert("Password is required.");
+          return;
+        }
+      }
+      const updated = await api<APIRequest>(
+        `/requests/${selectedRequest.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            auth_config,
+          }),
+        },
+        token,
+      );
+      setSelectedRequest(updated);
+      setRequests((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
+      setMessage("Authentication updated successfully.");
+      setAuthPassword("");
+      setAuthToken("");
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "Could not update credentials.",
+      );
+    }
+  }
 
   async function createCollection() {
     const name = window.prompt("Collection name");
@@ -481,7 +794,7 @@ export default function App() {
     return (
       <main className="shell">
         <section className="hero auth-card">
-          <span className="eyebrow">APIForge · Phase 7</span>
+          <span className="eyebrow">APIForge · Phase 8</span>
           <h1>Your API workspace starts here.</h1>
           <p>
             Collections, folders, persisted request definitions, and workspace
@@ -784,23 +1097,121 @@ export default function App() {
                   onChange={(e) => setRequestName(e.target.value)}
                   placeholder="Request name"
                 />
+                {Object.values(presence).length > 0 && (
+                  <div className="presence-bar">
+                    <span className="presence-dot" />
+                    {Object.values(presence).map((item) => (
+                      <span key={item.connection_id} className="presence-user">
+                        {item.name}
+                        {item.user_id === user.id ? " (you)" : ""}
+                      </span>
+                    ))}
+                    <small>
+                      {collaborationReady ? "live" : "reconnecting"}
+                    </small>
+                  </div>
+                )}
               </div>
               <nav className="tabs">
-                <span className="active">Params</span>
-                <span>Headers</span>
-                <span>Body</span>
-                <span>Auth</span>
+                {["params", "headers", "body", "auth"].map((tab) => (
+                  <span
+                    key={tab}
+                    className={activeTab === tab ? "active" : ""}
+                    onClick={() => setActiveTab(tab as any)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </span>
+                ))}
               </nav>
               <div className="editor-panel">
-                <div className="muted">Request definition editor</div>
-                <label>
-                  Body
-                  <textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    placeholder='{"key":"value"}'
-                  />
-                </label>
+                {activeTab === "body" && (
+                  <label>
+                    Body
+                    <textarea
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder='{"key":"value"}'
+                    />
+                  </label>
+                )}
+                {activeTab === "params" && (
+                  <div className="muted">
+                    Params editing is not implemented in this phase.
+                  </div>
+                )}
+                {activeTab === "headers" && (
+                  <div className="muted">
+                    Headers editing is not implemented in this phase.
+                  </div>
+                )}
+                {activeTab === "auth" && (
+                  <div
+                    className="auth-editor"
+                    style={{ display: "grid", gap: "12px", marginTop: "12px" }}
+                  >
+                    <h3>Authentication Configuration</h3>
+                    <label style={{ display: "grid", gap: "6px" }}>
+                      Type
+                      <select
+                        value={authType}
+                        onChange={(e) => setAuthType(e.target.value)}
+                      >
+                        <option value="none">None</option>
+                        <option value="bearer">Bearer Token</option>
+                        <option value="basic">Basic Auth</option>
+                      </select>
+                    </label>
+                    {authType === "bearer" && (
+                      <label style={{ display: "grid", gap: "6px" }}>
+                        Token (Write-Only)
+                        <input
+                          type="password"
+                          value={authToken}
+                          onChange={(e) => setAuthToken(e.target.value)}
+                          placeholder={
+                            selectedRequest?.auth_config?.has_token
+                              ? "Saved Bearer Token Masked (enter to change)"
+                              : "Enter token"
+                          }
+                        />
+                      </label>
+                    )}
+                    {authType === "basic" && (
+                      <>
+                        <label style={{ display: "grid", gap: "6px" }}>
+                          Username
+                          <input
+                            type="text"
+                            value={authUsername}
+                            onChange={(e) => setAuthUsername(e.target.value)}
+                            placeholder="Username"
+                          />
+                        </label>
+                        <label style={{ display: "grid", gap: "6px" }}>
+                          Password (Write-Only)
+                          <input
+                            type="password"
+                            value={authPassword}
+                            onChange={(e) => setAuthPassword(e.target.value)}
+                            placeholder={
+                              selectedRequest?.auth_config?.has_credentials
+                                ? "Saved Password Masked (enter to change)"
+                                : "Enter password"
+                            }
+                          />
+                        </label>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={updateAuthConfig}
+                      style={{ marginTop: "12px", width: "max-content" }}
+                    >
+                      Update Authentication Configuration
+                    </button>
+                  </div>
+                )}
                 <div className="notice">
                   Requests execute through the Phase 6 security-validated
                   execution engine. Select an environment before sending.

@@ -207,6 +207,27 @@ class RequestUpdate(BaseModel):
         return str(parsed)
 
 
+class AuthConfigResponse(BaseModel):
+    type: Literal["none", "bearer", "basic"] = "none"
+    username: str | None = None
+    has_credentials: bool | None = None
+    has_token: bool | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def transform_auth(cls, data):
+        if not isinstance(data, dict):
+            return data
+        auth_type = data.get("type", "none")
+        transformed = {"type": auth_type}
+        if auth_type == "basic":
+            transformed["username"] = data.get("username")
+            transformed["has_credentials"] = data.get("password") is not None
+        elif auth_type == "bearer":
+            transformed["has_token"] = data.get("token") is not None
+        return transformed
+
+
 class RequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
@@ -219,7 +240,7 @@ class RequestResponse(BaseModel):
     headers: list[dict] | None
     query_params: list[dict] | None
     body: str | None
-    auth_config: dict | None
+    auth_config: AuthConfigResponse | None
     position: int
     created_at: datetime
     updated_at: datetime

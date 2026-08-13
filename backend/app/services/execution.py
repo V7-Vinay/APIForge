@@ -256,6 +256,77 @@ async def _read_response(response: httpx.Response) -> tuple[str | None, str, int
     )
 
 
+import re
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+
+def redact_sensitive_text(text: str | None) -> str | None:
+    if text is None:
+        return None
+    # 1. Bearer token pattern
+    text = re.sub(r'(?i)\bbearer\s+[a-zA-Z0-9_\-\.\~/\+=]+', 'Bearer [REDACTED]', text)
+    # 2. Basic credentials pattern
+    text = re.sub(r'(?i)\bbasic\s+[a-zA-Z0-9_\-\.\~/\+=]+', 'Basic [REDACTED]', text)
+    # 3. JSON / quoted key-value pattern (matches "token": "..." or 'password': "...", etc.)
+    text = re.sub(
+        r'(?i)(["\'](?:password|token|secret|api_key|apikey|pwd|pass|credential|authorization|cookie|x-api-key|set-cookie)["\']\s*:\s*)(["\'])(?:.*?)(["\'])',
+        r'\1\2[REDACTED]\3',
+        text
+    )
+    # 4. Form-urlencoded / Query params in text (matches token=abc or password=xyz)
+    text = re.sub(
+        r'(?i)(\b(?:password|token|secret|api_key|apikey|pwd|pass|credential|authorization|cookie|x-api-key|set-cookie)\b\s*=\s*)([^&\s"\']+)',
+        r'\1[REDACTED]',
+        text
+    )
+    return text
+
+def redact_url(url: str) -> str:
+    try:
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        q_params = []
+        sensitive_keys = {
+            "password", "token", "secret", "api_key", "apikey", "pwd", "pass",
+            "credential", "authorization", "cookie", "set-cookie", "x-api-key"
+        }
+        for k, v in parse_qsl(parsed.query, keep_blank_values=True):
+            if k.lower() in sensitive_keys or any(sk in k.lower() for sk in ["token", "secret", "key", "pass"]):
+                q_params.append((k, "[REDACTED]"))
+            else:
+                q_params.append((k, v))
+        new_query = urlencode(q_params)
+        return urlunparse(parsed._replace(query=new_query))
+    except Exception:
+        return redact_sensitive_text(url) or url
+
+def redact_headers_dict(headers: dict[str, str]) -> dict[str, str]:
+    sensitive_keys = {
+        "authorization", "proxy-authorization", "cookie", "set-cookie",
+        "x-api-key", "x-auth-token", "api-key"
+    }
+    redacted = {}
+    for k, v in headers.items():
+        if k.lower() in sensitive_keys:
+            redacted[k] = "[REDACTED]"
+        else:
+            redacted[k] = redact_sensitive_text(v) or v
+    return redacted
+
+def sanitize_execution_data(
+    url: str,
+    headers: dict,
+    body: str | None,
+    error_message: str | None
+) -> tuple[str, dict, str | None, str | None]:
+    return (
+        redact_url(url),
+        redact_headers_dict(headers),
+        redact_sensitive_text(body),
+        redact_sensitive_text(error_message)
+    )
+
+
 async def record_execution_history(
     session: AsyncSession,
     *,
@@ -265,22 +336,31 @@ async def record_execution_history(
     environment: Environment | None,
     result: dict,
 ) -> None:
+    raw_url = result.get("url", request.url)
+    raw_headers = result.get("headers", {})
+    raw_body = result.get("body")
+    raw_error = result.get("error_message")
+
+    redacted_url, redacted_headers, redacted_body, redacted_error = sanitize_execution_data(
+        raw_url, raw_headers, raw_body, raw_error
+    )
+
     history = ExecutionHistory(
         request_id=request.id,
         workspace_id=workspace_id,
         user_id=user_id,
         environment_id=environment.id if environment else None,
         method=result.get("method", request.method),
-        url=result.get("url", request.url),
+        url=redacted_url,
         status_code=result.get("status_code"),
         success=result.get("success", False),
         duration_ms=result.get("duration_ms"),
         response_size_bytes=result.get("response_size_bytes", 0),
-        response_headers=result.get("headers", {}),
-        response_body=result.get("body"),
+        response_headers=redacted_headers,
+        response_body=redacted_body,
         content_type=result.get("content_type"),
         error_code=result.get("error_code"),
-        error_message=result.get("error_message"),
+        error_message=redacted_error,
     )
     session.add(history)
     await session.commit()

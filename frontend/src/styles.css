@@ -456,3 +456,33 @@ details summary {
     width: min(420px, 80vw);
   }
 }
+
+.presence-bar {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #9ba8bd;
+  font-size: 0.78rem;
+}
+
+.presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #69d0a0;
+  box-shadow: 0 0 0 3px rgba(105, 208, 160, 0.12);
+}
+
+.presence-user {
+  padding: 4px 8px;
+  border: 1px solid #253148;
+  border-radius: 999px;
+  background: #0d1522;
+  color: #d5deed;
+}
+
+.presence-bar small {
+  color: #6f7d92;
+}

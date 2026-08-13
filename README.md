@@ -2,9 +2,9 @@
 
 APIForge is a production-oriented collaborative API development platform built using FastAPI, React, PostgreSQL, and Redis.
 
-## Status: Phase 7 Completed
+## Status: Phase 8 Completed
 
-This repository houses the merged codebase of **Phase 1 (Infrastructure)**, **Phase 2 (Authentication & Identity)**, **Phase 3 (Multi-Tenant Workspaces & RBAC)**, **Phase 4 (Collections & Request definitions)**, **Phase 5 (Environment Management)**, **Phase 6 (Request Execution Engine & History)**, and **Phase 7 (Search & Filtering)**.
+This repository houses the merged codebase of **Phase 1 (Infrastructure)**, **Phase 2 (Authentication & Identity)**, **Phase 3 (Multi-Tenant Workspaces & RBAC)**, **Phase 4 (Collections & Request definitions)**, **Phase 5 (Environment Management)**, **Phase 6 (Request Execution Engine & History)**, **Phase 7 (Search & Filtering)**, and **Phase 8 (Real-Time Collaboration)**.
 
 ### Core Features Installed:
 - **Relational Backend**: FastAPI + SQLAlchemy (Async) running on Python 3.12.
@@ -22,6 +22,7 @@ This repository houses the merged codebase of **Phase 1 (Infrastructure)**, **Ph
 - **SSRF Prevention Guards**: Checks resolved host IP addresses to block connections to private, link-local, loopback, and restricted networks.
 - **Global Workspace Search**: Combined resource querying using SQL UNION ALL over collections, folders, and request names.
 - **Offset-based Pagination**: Paginated Collection/Request listing with full navigation metadata.
+- **Real-Time Collaboration**: Authenticated workspace WebSockets with request-level presence, Redis Pub/Sub fan-out, heartbeat/TTL presence, and resource update events.
 - **Auto Migrations**: DB migrations managed via Alembic and executed on startup.
 - **Health & Readiness Endpoints**: Automated check services at `/api/v1/health` and `/api/v1/ready`.
 
@@ -58,6 +59,6 @@ Once containers are running, the application can be accessed at:
 
 Detailed architecture and structural schemas are available in [docs/ARCHITECTURE.md](file:///c:/Users/HP/Desktop/Desktop/WEB%20PROJECT/APIForge/docs/ARCHITECTURE.md).
 
-### Next Phase: Phase 7
-Phase 7 will introduce execution history database logs, collections runners, and real-time WebSockets synchronization.
+### Next Phase: Phase 9
+Phase 9 will introduce collaborative collection runners, advanced team management, and OpenAPI-compatible auto-documentation generation.
 

@@ -1,17 +1,17 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
 from app.api.workspace_dependencies import (
-    get_workspace,
+    authorize_workspace,
     get_workspace_membership,
-    require_workspace_permission,
 )
 from app.core.database import get_db
 from app.core.permissions import Permission
+from app.core.errors import ConflictError, ValidationError, ForbiddenError
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceRole
 from app.models.workspace_member import WorkspaceMember
@@ -50,9 +50,7 @@ async def create(
             slug=payload.slug,
         )
     except WorkspaceConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise ConflictError(str(exc))
 
 
 @router.get("", response_model=list[WorkspaceResponse])
@@ -64,17 +62,16 @@ async def list_workspaces(
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
-async def get_one(workspace: Workspace = Depends(get_workspace)):
+async def get_one(
+    workspace: Workspace = Depends(authorize_workspace(Permission.VIEW_WORKSPACE)),
+):
     return workspace
 
 
 @router.patch("/{workspace_id}", response_model=WorkspaceResponse)
 async def update(
     payload: WorkspaceUpdate,
-    workspace: Workspace = Depends(get_workspace),
-    membership: WorkspaceMember = Depends(
-        require_workspace_permission(Permission.MANAGE_WORKSPACE)
-    ),
+    workspace: Workspace = Depends(authorize_workspace(Permission.MANAGE_WORKSPACE)),
     session: AsyncSession = Depends(get_db),
 ):
     return await update_workspace(session, workspace=workspace, name=payload.name)
@@ -82,25 +79,19 @@ async def update(
 
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete(
-    workspace: Workspace = Depends(get_workspace),
-    membership: WorkspaceMember = Depends(
-        require_workspace_permission(Permission.MANAGE_WORKSPACE)
-    ),
+    workspace: Workspace = Depends(authorize_workspace(Permission.MANAGE_WORKSPACE)),
+    membership: WorkspaceMember = Depends(get_workspace_membership),
     session: AsyncSession = Depends(get_db),
 ):
     if membership.role != WorkspaceRole.OWNER.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the owner can delete a workspace.",
-        )
+        raise ForbiddenError("Only the owner can delete a workspace.")
     await delete_workspace(session, workspace=workspace)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberResponse])
 async def list_members(
-    workspace: Workspace = Depends(get_workspace),
-    membership: WorkspaceMember = Depends(get_workspace_membership),
+    workspace: Workspace = Depends(authorize_workspace(Permission.VIEW_WORKSPACE)),
     session: AsyncSession = Depends(get_db),
 ):
     result = await session.execute(
@@ -128,21 +119,13 @@ async def list_members(
 async def change_member_role(
     user_id: uuid.UUID,
     payload: WorkspaceMemberRoleUpdate,
-    workspace: Workspace = Depends(get_workspace),
-    actor_membership: WorkspaceMember = Depends(
-        require_workspace_permission(Permission.MANAGE_MEMBERS)
-    ),
+    workspace: Workspace = Depends(authorize_workspace(Permission.MANAGE_MEMBERS)),
     session: AsyncSession = Depends(get_db),
 ):
     if payload.role == WorkspaceRole.OWNER:
-        raise HTTPException(
-            status_code=400,
-            detail="Ownership transfer is not supported in Phase 3.",
-        )
+        raise ValidationError("Ownership transfer is not supported in Phase 3.")
     if user_id == workspace.created_by and payload.role != WorkspaceRole.OWNER:
-        raise HTTPException(
-            status_code=400, detail="The workspace creator remains the owner."
-        )
+        raise ValidationError("The workspace creator remains the owner.")
     try:
         member = await update_member_role(
             session,
@@ -151,7 +134,7 @@ async def change_member_role(
             new_role=payload.role,
         )
     except WorkspaceRuleError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise ValidationError(str(exc))
 
     user = await session.get(User, member.user_id)
     return WorkspaceMemberResponse(
@@ -169,14 +152,11 @@ async def change_member_role(
 )
 async def remove_workspace_member(
     user_id: uuid.UUID,
-    workspace: Workspace = Depends(get_workspace),
-    actor_membership: WorkspaceMember = Depends(
-        require_workspace_permission(Permission.MANAGE_MEMBERS)
-    ),
+    workspace: Workspace = Depends(authorize_workspace(Permission.MANAGE_MEMBERS)),
     session: AsyncSession = Depends(get_db),
 ):
     try:
         await remove_member(session, workspace=workspace, target_user_id=user_id)
     except WorkspaceRuleError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise ValidationError(str(exc))
     return Response(status_code=status.HTTP_204_NO_CONTENT)

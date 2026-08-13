@@ -6,6 +6,15 @@ from app.core.config import settings
 from app.core.database import close_database, init_database
 from app.core.logging import configure_logging
 from app.core.redis import close_redis, init_redis
+from app.core.errors import (
+    APIError,
+    api_error_handler,
+    http_exception_handler,
+    validation_exception_handler,
+    global_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 @asynccontextmanager
@@ -26,6 +35,11 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+app.add_exception_handler(APIError, api_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, global_exception_handler)
 
 app.add_middleware(
     CORSMiddleware,

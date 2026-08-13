@@ -29,4 +29,4 @@ Body:
 
 ## Scope boundary
 
-Execution history persistence, collection runners, WebSockets, and advanced monitoring remain outside this phase unless explicitly assigned by the master roadmap.
+Collection runners, WebSockets, and advanced monitoring remain outside this phase unless explicitly assigned by the master roadmap. (Note: Execution history database logging is included and implemented as part of request execution.)

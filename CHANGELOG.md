@@ -2,6 +2,14 @@
 
 All notable changes to the APIForge project will be documented in this file.
 
+## [0.8.0] - 2026-08-13
+### Added
+- **Authenticated WebSockets**: Added `/api/v1/workspaces/{workspace_id}/collaboration` WebSocket router, performing JWT authentication as the first message payload.
+- **Request-Level Presence**: Tracks active request editors connections, saving presence state (connection ID, user ID, name, request ID, last-seen) in Redis with a 30-second TTL.
+- **Heartbeat presence**: Frontend clients send heartbeats every 10 seconds to keep connection presence alive.
+- **Pub/Sub event fan-out**: REST mutations publish lightweight collection/folder and request updates (`COLLECTION_UPDATED`, `REQUEST_UPDATED`) to workspace collaboration channels in Redis. Other active clients receive the notification and trigger REST re-fetching.
+- **Aesthetic presence UI**: Displays active request editors in the request editor top pane presence bar with connection status.
+
 ## [0.7.0] - 2026-08-13
 ### Added
 - **Global Workspace Search**: Added `GET /api/v1/workspaces/{workspace_id}/search` combining Collections, Folders, and APIRequests with ILIKE query matching.
