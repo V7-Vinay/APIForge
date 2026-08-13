@@ -7,6 +7,7 @@ from app.api.v1.invitations import router as invitation_router
 from app.api.v1.resources import router as resource_router
 from app.api.v1.environments import router as environment_router
 from app.api.v1.execution import router as execution_router
+from app.api.v1.search import router as search_router
 from app.core.database import engine
 from app.core.redis import get_redis
 
@@ -17,6 +18,7 @@ api_router.include_router(invitation_router)
 api_router.include_router(resource_router)
 api_router.include_router(environment_router)
 api_router.include_router(execution_router)
+api_router.include_router(search_router)
 
 
 @api_router.get("/health", tags=["system"])

@@ -21,6 +21,35 @@ type Folder = {
   name: string;
   position: number;
 };
+type Environment = {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+type EnvironmentVariable = {
+  id: string;
+  environment_id: string;
+  key: string;
+  is_secret: boolean;
+  created_at: string;
+  updated_at: string;
+};
+type SearchItem = {
+  id: string;
+  resource_type: "collection" | "folder" | "request";
+  name: string;
+  description: string | null;
+  collection_id: string | null;
+  folder_id: string | null;
+  method: string | null;
+  url: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+};
 type APIRequest = {
   id: string;
   collection_id: string;
@@ -39,22 +68,6 @@ type APIRequest = {
     password?: string;
   } | null;
   position: number;
-};
-type Environment = {
-  id: string;
-  workspace_id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-};
-type EnvironmentVariable = {
-  id: string;
-  environment_id: string;
-  key: string;
-  is_secret: boolean;
-  created_at: string;
-  updated_at: string;
 };
 
 async function api<T>(
@@ -97,6 +110,11 @@ export default function App() {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [requests, setRequests] = useState<APIRequest[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchItem[]>([]);
+  const [environments, setEnvironments] = useState<Environment[]>([]);
+  const [environmentId, setEnvironmentId] = useState("");
+  const [variables, setVariables] = useState<EnvironmentVariable[]>([]);
   const [selectedCollection, setSelectedCollection] =
     useState<Collection | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<APIRequest | null>(
@@ -106,9 +124,6 @@ export default function App() {
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [body, setBody] = useState("");
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [environmentId, setEnvironmentId] = useState("");
-  const [variables, setVariables] = useState<EnvironmentVariable[]>([]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -160,12 +175,9 @@ export default function App() {
       accessToken,
     );
     setEnvironments(data);
-    if (data[0]) {
+    if (!environmentId && data[0]) {
       setEnvironmentId(data[0].id);
       await loadVariables(data[0].id, accessToken);
-    } else {
-      setEnvironmentId("");
-      setVariables([]);
     }
   }
 
@@ -222,6 +234,44 @@ export default function App() {
     }
   }
 
+  async function runSearch(query = searchQuery) {
+    if (!token || !workspaceId) return;
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const result = await api<{ items: SearchItem[]; total: number }>(
+        `/workspaces/${workspaceId}/search?q=${encodeURIComponent(trimmed)}&page=1&page_size=12&sort_by=name&sort_order=asc`,
+        {},
+        token,
+      );
+      setSearchResults(result.items);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Search failed.");
+    }
+  }
+
+  async function selectSearchResult(item: SearchItem) {
+    if (!token || !item.collection_id) return;
+    const collection = collections.find((c) => c.id === item.collection_id);
+    if (collection) {
+      setSelectedCollection(collection);
+      await loadChildren(collection.id, token);
+      if (item.resource_type === "request") {
+        const request = await api<APIRequest>(
+          `/requests/${item.id}`,
+          {},
+          token,
+        );
+        setSelectedRequest(request);
+      }
+    }
+    setSearchQuery("");
+    setSearchResults([]);
+  }
+
   async function loadCollections(id = workspaceId, accessToken = token!) {
     if (!id) return;
     const data = await api<Collection[]>(
@@ -254,7 +304,6 @@ export default function App() {
       setMethod(selectedRequest.method);
       setUrl(selectedRequest.url);
       setBody(selectedRequest.body ?? "");
-      setExecution(null);
     }
   }, [selectedRequest]);
 
@@ -359,33 +408,6 @@ export default function App() {
     }
   }
 
-  async function saveRequest(event: FormEvent) {
-    event.preventDefault();
-    if (!token || !selectedRequest) return;
-    try {
-      const updated = await api<APIRequest>(
-        `/requests/${selectedRequest.id}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: requestName,
-            method,
-            url,
-            body: body || null,
-          }),
-        },
-        token,
-      );
-      setSelectedRequest(updated);
-      setRequests((prev) =>
-        prev.map((r) => (r.id === updated.id ? updated : r)),
-      );
-      setMessage("Request saved.");
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Could not save request.");
-    }
-  }
-
   async function executeSelectedRequest() {
     if (!token || !selectedRequest || !environmentId) {
       setMessage("Select an environment before sending.");
@@ -413,6 +435,33 @@ export default function App() {
     }
   }
 
+  async function saveRequest(event: FormEvent) {
+    event.preventDefault();
+    if (!token || !selectedRequest) return;
+    try {
+      const updated = await api<APIRequest>(
+        `/requests/${selectedRequest.id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: requestName,
+            method,
+            url,
+            body: body || null,
+          }),
+        },
+        token,
+      );
+      setSelectedRequest(updated);
+      setRequests((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
+      setMessage("Request saved.");
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Could not save request.");
+    }
+  }
+
   async function logout() {
     if (token)
       await api("/auth/logout", { method: "POST" }, token).catch(() => {});
@@ -420,11 +469,7 @@ export default function App() {
     setUser(null);
     setWorkspaces([]);
     setCollections([]);
-    setEnvironments([]);
-    setEnvironmentId("");
-    setVariables([]);
     setSelectedRequest(null);
-    setExecution(null);
   }
 
   const treeFolders = useMemo(
@@ -436,11 +481,13 @@ export default function App() {
     return (
       <main className="shell">
         <section className="hero auth-card">
-          <span className="eyebrow">APIForge · Phase 4</span>
+          <span className="eyebrow">APIForge · Phase 7</span>
           <h1>Your API workspace starts here.</h1>
           <p>
-            Collections, folders and persisted request definitions are now
-            available. Requests are stored only; execution arrives in Phase 6.
+            Collections, folders, persisted request definitions, and workspace
+            environments are available. Requests can now be searched, filtered,
+            paginated, sorted, and executed through the security-validated
+            execution engine.
           </p>
           <form onSubmit={submit} className="auth-form">
             {mode === "register" && (
@@ -497,6 +544,40 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <strong>APIForge</strong>
+        <div className="global-search">
+          <input
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (!e.target.value.trim()) setSearchResults([]);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") runSearch();
+            }}
+            placeholder="Search collections, folders, requests…"
+          />
+          <button type="button" onClick={() => runSearch()}>
+            Search
+          </button>
+          {searchResults.length > 0 && (
+            <div className="search-results">
+              {searchResults.map((item) => (
+                <button
+                  type="button"
+                  key={`${item.resource_type}-${item.id}`}
+                  onClick={() => selectSearchResult(item)}
+                >
+                  <span>
+                    {item.resource_type}
+                    {item.method ? ` · ${item.method}` : ""}
+                  </span>
+                  <strong>{item.name}</strong>
+                  {item.url && <small>{item.url}</small>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="workspace-select">
           <select
             value={workspaceId}
@@ -729,12 +810,7 @@ export default function App() {
                     <div className="response-head">
                       <strong>
                         {execution.success
-                          ? `${execution.status_code} ${
-                              execution.status_code >= 200 &&
-                              execution.status_code < 300
-                                ? "OK"
-                                : "HTTP Response"
-                            }`
+                          ? `${execution.status_code} ${execution.status_code >= 200 && execution.status_code < 300 ? "OK" : "HTTP Response"}`
                           : execution.error_code}
                       </strong>
                       <span>

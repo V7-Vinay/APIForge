@@ -87,9 +87,14 @@ The project currently contains core infrastructure, security layers, and multi-t
 - **SSRF Prevention Controls**: Validates request hostnames against IP range list to reject connection attempts resolving to loopback, private, or reserved subnets.
 - **Redirect Guards**: Rejects unvalidated redirect locations.
 - **Response Bounds & Redaction**: Discards HTTP response payloads exceeding size limits, and sanitizes outgoing headers to redact secrets (`Authorization`, `Cookie`, etc.).
-- **Frontend Response Visualizer**: Connected request executions to React sidebar send actions showing timing and header diagnostics.
+### Phase 7 — Search & Filtering
+- **Cross-Resource Global Search**: Implemented `GET /api/v1/workspaces/{workspace_id}/search` utilizing SQL `UNION ALL` across collections, folders, and requests with case-insensitive `ilike` text pattern matching.
+- **Database-Level Pagination**: Introduced paginated collections and requests endpoints using `OFFSET/LIMIT` alongside metadata parameters (`page`, `page_size`, `total_pages`, `has_next`, `has_previous`).
+- **Workspace Bounds & RBAC**: Restricts queries to current workspace memberships, preventing cross-workspace leakage.
+- **Top Bar Global Search Bar**: Integrated React-based search bar in the topbar with a list result dropdown.
 
 ---
+
 
 ## 3. API Endpoints
 
@@ -166,14 +171,21 @@ The project currently contains core infrastructure, security layers, and multi-t
 | DELETE | `/api/v1/environment-variables/{variable_id}` | Delete environment variable | Authenticated + Member (EDITOR+) |
 | POST | `/api/v1/environments/{environment_id}/resolve` | Resolve variable placeholders in text | Authenticated + Member (VIEWER+) |
 
+### Search & Pagination Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| GET | `/api/v1/workspaces/{workspace_id}/search` | Global workspace resource search | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/workspaces/{workspace_id}/collections/page` | Paginated collections listing | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/workspaces/{workspace_id}/requests/page` | Paginated requests listing | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/requests/{request_id}/history` | Retrieve request execution history | Authenticated + Member (VIEWER+) |
+
+
 ---
 
-## 4. Excluded Scope (Roadmap for Phase 7+)
+To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 8+:
 
-To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 7+:
+1. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
+2. **Auto-Documentation**: OpenAPI-compatible schema documentation generation from workspace request definitions.
 
-1. **Execution History**: Persisting execution logs, response time stats, headers and body for auditability.
-2. **WebSockets**: Real-time collaborative syncing of workspace states and collaborative editing.
-3. **Search & Auto-Documentation**: Global search over requests/collections and OpenAPI-compatible schema documentation generation.
 
 
