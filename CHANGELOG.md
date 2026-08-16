@@ -2,6 +2,31 @@
 
 All notable changes to the APIForge project will be documented in this file.
 
+## [0.11.0] - 2026-08-16
+### Added
+- **Pytest Testing Pyramid**: Added Pytest config file `pytest.ini` with custom markers (unit, integration, security, e2e) and auto-asyncio test settings.
+- **Deterministic Unit Tests**: Added `tests/test_phase11_unit.py` testing RBAC permission matrices, recursive credentials/secret redaction mappings, URL query parsing, and search pagination calculations.
+- **Asynchronous Integration Tests**: Added `tests/test_phase11_integration.py` validating tenant separation rules, non-disclosure of Bearer/Basic Auth tokens in request responses, audit log entries, and health/readiness contracts.
+- **Autouse Connection Teardowns**: Integrated autouse hooks in `conftest.py` ensuring database engine connection pools are cleanly closed on test exit to avoid event loop/asyncpg failures on Windows.
+- **Playwright E2E Smoke Tests**: Added `playwright.config.ts` and `e2e/smoke.spec.ts` script logging in users via Chrome and asserting topbar controls, Docs/Audit panels, and search input layouts.
+
+## [0.10.0] - 2026-08-15
+### Added
+- **Security Audit Logs**: Added persistent HTTP mutation activity log table `audit_logs` tracking user, action, method, path, status, IP, and correlation request ID. Exposes `GET /api/v1/workspaces/{workspace_id}/audit-logs` endpoint (restricted to OWNER/ADMIN).
+- **Distributed Rate Limiting**: Added Redis-backed sliding/fixed-window rate limiter middleware with configurable endpoints (login: 10/min, registration: 5/min, refresh: 20/min, execution: 30/min, general: 300/min).
+- **Security Headers & Hardening**: Injected secure response headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, HSTS in production, and custom `X-Request-ID` correlation context headers).
+- **Production Startup Safety Checks**: Refuses app execution in production mode if default secrets (JWT_SECRET_KEY), insecure cookies, or missing environment encryption keys are detected.
+- **Centralized Secret Redaction**: Added mapping, URL query, header, and body text sanitizers protecting sensitive keys, credential headers, and query strings. Sanitizes request execution history before database persistence.
+- **Aesthetic Audit UI Panel**: Integrated responsive React collapsible Security Audit Log modal in the top header, rendering list logs with custom status badges.
+
+## [0.9.0] - 2026-08-14
+### Added
+- **API Auto-Documentation**: Added OpenAPI 3.0.3 generator endpoint `GET /api/v1/workspaces/{workspace_id}/documentation/openapi.json` to dynamically build full-specification documentation from request definitions.
+- **Documentation Summary**: Added summary metadata endpoint `GET /api/v1/workspaces/{workspace_id}/documentation/summary` listing workspace API statistics.
+- **OpenAPI Import**: Added `/api/v1/workspaces/{workspace_id}/documentation/import` endpoint accepting OpenAPI 3.0.x and 3.1.x json specifications, auto-creating collection, folders, and request definitions.
+- **Aesthetic Docs UI Panel**: Integrated responsive React collapsible Documentation panel in the top header, allowing users to view summary statistics, download the OpenAPI specification file, or upload an OpenAPI spec to import.
+- **Credential Protection**: Ensured secrets and sensitive credential headers (Authorization, Cookie, etc.) are redacted from generated documentation, and basic/bearer schemes are imported without token payloads.
+
 ## [0.8.0] - 2026-08-13
 ### Added
 - **Authenticated WebSockets**: Added `/api/v1/workspaces/{workspace_id}/collaboration` WebSocket router, performing JWT authentication as the first message payload.

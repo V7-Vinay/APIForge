@@ -9,6 +9,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.redaction import redact_headers, redact_text, redact_url
 from app.models.api_request import APIRequest
 from app.models.environment import Environment
 from app.models.execution_history import ExecutionHistory
@@ -204,18 +205,7 @@ async def resolve_request(
 
 
 def _redact_headers(headers: dict[str, str]) -> dict[str, str]:
-    sensitive = {
-        "authorization",
-        "proxy-authorization",
-        "cookie",
-        "set-cookie",
-        "x-api-key",
-        "x-auth-token",
-    }
-    return {
-        key: "[REDACTED]" if key.lower() in sensitive else value
-        for key, value in headers.items()
-    }
+    return redact_headers(headers)
 
 
 async def _read_response(response: httpx.Response) -> tuple[str | None, str, int, bool]:
@@ -256,63 +246,6 @@ async def _read_response(response: httpx.Response) -> tuple[str | None, str, int
     )
 
 
-import re
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-
-def redact_sensitive_text(text: str | None) -> str | None:
-    if text is None:
-        return None
-    # 1. Bearer token pattern
-    text = re.sub(r'(?i)\bbearer\s+[a-zA-Z0-9_\-\.\~/\+=]+', 'Bearer [REDACTED]', text)
-    # 2. Basic credentials pattern
-    text = re.sub(r'(?i)\bbasic\s+[a-zA-Z0-9_\-\.\~/\+=]+', 'Basic [REDACTED]', text)
-    # 3. JSON / quoted key-value pattern (matches "token": "..." or 'password': "...", etc.)
-    text = re.sub(
-        r'(?i)(["\'](?:password|token|secret|api_key|apikey|pwd|pass|credential|authorization|cookie|x-api-key|set-cookie)["\']\s*:\s*)(["\'])(?:.*?)(["\'])',
-        r'\1\2[REDACTED]\3',
-        text
-    )
-    # 4. Form-urlencoded / Query params in text (matches token=abc or password=xyz)
-    text = re.sub(
-        r'(?i)(\b(?:password|token|secret|api_key|apikey|pwd|pass|credential|authorization|cookie|x-api-key|set-cookie)\b\s*=\s*)([^&\s"\']+)',
-        r'\1[REDACTED]',
-        text
-    )
-    return text
-
-def redact_url(url: str) -> str:
-    try:
-        parsed = urlparse(url)
-        if not parsed.query:
-            return url
-        q_params = []
-        sensitive_keys = {
-            "password", "token", "secret", "api_key", "apikey", "pwd", "pass",
-            "credential", "authorization", "cookie", "set-cookie", "x-api-key"
-        }
-        for k, v in parse_qsl(parsed.query, keep_blank_values=True):
-            if k.lower() in sensitive_keys or any(sk in k.lower() for sk in ["token", "secret", "key", "pass"]):
-                q_params.append((k, "[REDACTED]"))
-            else:
-                q_params.append((k, v))
-        new_query = urlencode(q_params)
-        return urlunparse(parsed._replace(query=new_query))
-    except Exception:
-        return redact_sensitive_text(url) or url
-
-def redact_headers_dict(headers: dict[str, str]) -> dict[str, str]:
-    sensitive_keys = {
-        "authorization", "proxy-authorization", "cookie", "set-cookie",
-        "x-api-key", "x-auth-token", "api-key"
-    }
-    redacted = {}
-    for k, v in headers.items():
-        if k.lower() in sensitive_keys:
-            redacted[k] = "[REDACTED]"
-        else:
-            redacted[k] = redact_sensitive_text(v) or v
-    return redacted
-
 def sanitize_execution_data(
     url: str,
     headers: dict,
@@ -320,10 +253,10 @@ def sanitize_execution_data(
     error_message: str | None
 ) -> tuple[str, dict, str | None, str | None]:
     return (
-        redact_url(url),
-        redact_headers_dict(headers),
-        redact_sensitive_text(body),
-        redact_sensitive_text(error_message)
+        redact_url(url) or url,
+        redact_headers(headers),
+        redact_text(body),
+        redact_text(error_message)
     )
 
 

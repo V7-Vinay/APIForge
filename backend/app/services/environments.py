@@ -26,7 +26,7 @@ _VAR_RE = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}")
 def _fernet() -> Fernet:
     key = settings.ENVIRONMENT_ENCRYPTION_KEY
     if not key:
-        if settings.APP_ENV == "development":
+        if settings.APP_ENV.lower() in {"development", "test", "testing"}:
             digest = hashlib.sha256(b"apiforge-development-environment-key").digest()
             key = base64.urlsafe_b64encode(digest).decode()
         else:

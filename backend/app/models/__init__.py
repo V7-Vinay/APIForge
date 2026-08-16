@@ -9,6 +9,7 @@ from app.models.folder import Folder
 from app.models.api_request import APIRequest, HTTPMethod
 from app.models.environment import Environment, EnvironmentVariable
 from app.models.execution_history import ExecutionHistory
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "Base",
@@ -25,4 +26,5 @@ __all__ = [
     "Environment",
     "EnvironmentVariable",
     "ExecutionHistory",
+    "AuditLog",
 ]

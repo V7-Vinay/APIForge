@@ -4,6 +4,7 @@ import sys
 from datetime import datetime, timezone
 
 from app.core.config import settings
+from app.core.request_context import get_request_id
 
 
 class JsonFormatter(logging.Formatter):
@@ -13,6 +14,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "request_id": get_request_id(),
         }
 
         if record.exc_info:

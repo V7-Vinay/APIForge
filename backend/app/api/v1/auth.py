@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.core.config import settings
@@ -40,27 +40,30 @@ def clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
-async def register(payload: RegisterRequest, session: AsyncSession = Depends(get_db)):
+async def register(payload: RegisterRequest, request: Request, session: AsyncSession = Depends(get_db)):
     try:
-        return await register_user(
+        user = await register_user(
             session,
             name=payload.name,
             email=str(payload.email),
             password=payload.password,
         )
+        request.state.audit_user_id = user.id
+        return user
     except ConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    payload: LoginRequest, response: Response, session: AsyncSession = Depends(get_db)
+    payload: LoginRequest, response: Response, request: Request, session: AsyncSession = Depends(get_db)
 ):
     try:
         user = await authenticate_user(
             session, email=str(payload.email), password=payload.password
         )
         access, refresh = await issue_token_pair(session, user)
+        request.state.audit_user_id = user.id
     except AuthenticationError as exc:
         raise HTTPException(
             status_code=401, detail=str(exc), headers={"WWW-Authenticate": "Bearer"}
@@ -74,6 +77,7 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(
     response: Response,
+    request: Request,
     refresh_token: str | None = Cookie(
         default=None, alias=settings.REFRESH_COOKIE_NAME
     ),
@@ -82,7 +86,8 @@ async def refresh(
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token required.")
     try:
-        _, access, new_refresh = await rotate_refresh_token(session, refresh_token)
+        user, access, new_refresh = await rotate_refresh_token(session, refresh_token)
+        request.state.audit_user_id = user.id
     except AuthenticationError as exc:
         clear_refresh_cookie(response)
         raise HTTPException(status_code=401, detail=str(exc)) from exc

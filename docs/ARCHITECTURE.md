@@ -104,6 +104,20 @@ The project currently contains core infrastructure, security layers, multi-tenan
 - **Pub/Sub event fan-out**: REST mutations publish lightweight collection/folder and request updates (`COLLECTION_UPDATED`, `REQUEST_UPDATED`) to workspace collaboration channels in Redis. Other active clients receive the notification and trigger REST re-fetching.
 - **Aesthetic presence UI**: Displays active request editors in the request editor top pane presence bar with connection status.
 
+### Phase 9 — Auto-Documentation & OpenAPI Import/Export
+- **OpenAPI 3.0.3 Generation**: Dynamically formats stored workspace collections, folders, and request definitions into an OpenAPI JSON specification.
+- **Redaction of Sensitive Credentials**: Automatically filters out authorization, cookies, and secret environment variables from documentation outputs to enforce secure boundaries.
+- **OpenAPI 3.x Import Engine**: Parses OpenAPI JSON documents and maps operations to APIForge Collections, Folders, and request configurations in a single transactional operation.
+- **Docs Control Panel UI**: Added an interactive modal panel in the React top header for exporting current specifications or importing external documents.
+
+### Phase 10 — Audit & Security
+- **Security Audit Logs**: Persistent table `audit_logs` logging user, workspace, HTTP method/path, status code, IP address, user-agent, and correlation ID for mutations, search, history, and documentation actions.
+- **Distributed Rate Limiting**: Redis-backed fixed-window rate limiter middleware with custom boundaries (login: 10/min, registration: 5/min, refresh: 20/min, request execution: 30/min, general: 300/min).
+- **Security Headers & Request ID**: Configured SecurityHeadersMiddleware emitting strict headers (nosniff, DENY, no-referrer, HSTS in production) and RequestContextMiddleware managing custom `X-Request-ID` correlation context.
+- **Production Hardening Checks**: Lifespan startup check validating secure cookie flags, environment encryption keys, and non-default JWT secret key in production environment.
+- **Secret Redaction**: Canonical utility redacting basic/bearer schemes, session cookies, api keys, and passwords from request history, URL parameters, mapping structures, and error logs before saving.
+- **Audit Panel UI**: Integrated collapsible security audit log rendering panel in the top header.
+
 ---
 
 ## 3. API Endpoints
@@ -194,6 +208,18 @@ The project currently contains core infrastructure, security layers, multi-tenan
 |---|---|---|---|
 | WS | `/api/v1/workspaces/{workspace_id}/collaboration` | WebSocket presence and change events endpoint | Authenticated + Member (VIEWER+) |
 
+### Documentation Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| GET | `/api/v1/workspaces/{workspace_id}/documentation/openapi.json` | Export OpenAPI 3.0.3 specification | Authenticated + Member (VIEWER+) |
+| GET | `/api/v1/workspaces/{workspace_id}/documentation/summary` | Fetch API documentation summary statistics | Authenticated + Member (VIEWER+) |
+| POST | `/api/v1/workspaces/{workspace_id}/documentation/import` | Import OpenAPI 3.x specification and populate workspace | Authenticated + Member (EDITOR+) |
+
+### Audit Endpoints
+| Method | Path | Description | Access |
+|---|---|---|---|
+| GET | `/api/v1/workspaces/{workspace_id}/audit-logs` | Retrieve workspace security audit logs | Authenticated + Member (ADMIN+) |
+
 ---
 
 ## 4. Real-Time Collaboration Architecture (Phase 8)
@@ -207,6 +233,29 @@ To avoid competing mutation paths, REST remains the authoritative transport for 
 
 ---
 
-To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 9+:
+## 5. Security Architecture (Phase 10)
 
-1. **Auto-Documentation**: OpenAPI-compatible schema documentation generation from workspace request definitions.
+APIForge enforces robust security layers across both backend and frontend layers:
+- **Persistent Security Audit Log**: A dedicated `audit_logs` database table records mutating REST API operations (`HTTP_POST`, `HTTP_PUT`, `HTTP_DELETE`) with details (action, method, path, status, IP, user, workspace, timestamp) and correlation IDs. Logs are restricted strictly to ADMIN+ roles.
+- **Distributed Rate Limiting**: Redis-backed rate limiting enforces thresholds on authentication paths (login: 10/min, registration: 5/min, refresh: 20/min), request executions (30/min), and general endpoints (300/min).
+- **Secure Response Headers**: Emitted headers prevent common security threats: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and custom `X-Request-ID` correlation identifiers.
+- **Centralized Redaction & Masking**: Sensitive elements (tokens, passwords, basic auth, query strings, headers) are automatically filtered out from request executions, documentation generation, and database execution logs.
+- **Production Guardrails**: Automated startup verification checks abort execution in production environments if insecure setups (default JWT secrets, HTTP-only cookie bypasses, or missing environment encryption keys) are present.
+
+---
+
+## 6. Testing Architecture & Pyramid (Phase 11)
+
+APIForge establishes a robust three-tier testing framework to ensure regression-free deployments:
+- **Pytest Testing Pyramid**:
+  - **Deterministic Unit Tests**: Cover RBAC roles, permission mappings, query/header redaction, SSRF validation policies, and search pagination calculations.
+  - **Asynchronous Integration Tests**: Validate multi-tenant isolation, health/readiness endpoints, DB persistence of audit trails, and non-disclosure of credentials.
+  - **Autouse DB Connection Disposal**: Autouse hooks automatically tear down database engine connection pools on test exit, preventing asyncpg/Windows teardown crashes.
+- **Playwright E2E Smoke Tests**: Automated browser flows verify the complete system functionality (registering users, workspace initialization, login flow, dashboard loading, and rendering of Docs/Audit controls).
+
+---
+
+To maintain a clean separation of concerns, the following features are **deliberately excluded** from the current implementation and are earmarked for Phase 12+:
+
+1. **Collaborative Collection Runners**: Automated test suite executors running request sequences in workspaces.
+2. **Advanced Team Management**: Enterprise-level workspace billing and user-quota constraints.

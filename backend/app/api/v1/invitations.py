@@ -49,7 +49,7 @@ async def create_workspace_invitation(
             email=payload.email,
             role=payload.role,
         )
-        if settings.APP_ENV == "development":
+        if settings.APP_ENV.lower() in {"development", "test", "testing"}:
             response.headers["X-Debug-Invitation-Token"] = plaintext_token
         return invitation
     except WorkspaceConflictError as exc:

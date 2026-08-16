@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     APP_NAME: str = "APIForge"
     APP_ENV: str = "development"
+    APP_VERSION: str = "0.12.0"
+    BUILD_SHA: str = "dev"
     LOG_LEVEL: str = "INFO"
     API_V1_PREFIX: str = "/api/v1"
     CORS_ORIGINS: str = "http://localhost:5173"
@@ -23,6 +25,20 @@ class Settings(BaseSettings):
     COOKIE_SAMESITE: str = "lax"
     JWT_SECRET_KEY: str = "dev-secret-change-this"
     JWT_ALGORITHM: str = "HS256"
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1,testserver,test,backend"
+    TRUST_PROXY_HEADERS: bool = False
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_GENERAL: int = 300
+    RATE_LIMIT_LOGIN: int = 10
+    RATE_LIMIT_REGISTER: int = 5
+    RATE_LIMIT_REFRESH: int = 20
+    RATE_LIMIT_EXECUTION: int = 30
+    RATE_LIMIT_FAIL_OPEN: bool = True
+    METRICS_ENABLED: bool = True
+    DATABASE_POOL_SIZE: int = 10
+    DATABASE_MAX_OVERFLOW: int = 10
+    DATABASE_POOL_TIMEOUT_SECONDS: int = 30
+    DATABASE_POOL_RECYCLE_SECONDS: int = 1800
     INVITATION_EXPIRE_DAYS: int = 7
 
     EXECUTION_TIMEOUT_SECONDS: int = 30
@@ -36,6 +52,10 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
     )
+
+    @property
+    def allowed_hosts(self) -> list[str]:
+        return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
     @property
     def cors_origins(self) -> list[str]:

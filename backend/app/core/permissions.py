@@ -13,6 +13,7 @@ class Permission(str, Enum):
     VIEW_HISTORY = "history:view"
     EDIT_DOCUMENTATION = "documentation:edit"
     MANAGE_ENVIRONMENTS = "environments:manage"
+    VIEW_AUDIT_LOGS = "audit:view"
 
 
 ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
@@ -28,6 +29,7 @@ ROLE_PERMISSIONS: dict[WorkspaceRole, frozenset[Permission]] = {
             Permission.VIEW_HISTORY,
             Permission.EDIT_DOCUMENTATION,
             Permission.MANAGE_ENVIRONMENTS,
+            Permission.VIEW_AUDIT_LOGS,
         }
     ),
     WorkspaceRole.EDITOR: frozenset(

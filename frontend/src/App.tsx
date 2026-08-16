@@ -89,6 +89,22 @@ type CollaborationEvent = {
   payload?: Record<string, any>;
 };
 
+type AuditLog = {
+  id: string;
+  user_id: string | null;
+  workspace_id: string | null;
+  action: string;
+  method: string;
+  path: string;
+  status_code: number;
+  resource_type: string | null;
+  resource_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  metadata_json: Record<string, any>;
+  created_at: string;
+};
+
 let tokenRefreshHandler: ((newToken: string) => void) | null = null;
 let logoutHandler: (() => void) | null = null;
 
@@ -188,6 +204,16 @@ export default function App() {
   const [presence, setPresence] = useState<
     Record<string, CollaborationPresence>
   >({});
+  const [documentationOpen, setDocumentationOpen] = useState(false);
+  const [documentationSummary, setDocumentationSummary] = useState<{
+    title: string;
+    version: string;
+    collection_count: number;
+    folder_count: number;
+    request_count: number;
+  } | null>(null);
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const selectedRequestRef = useRef<APIRequest | null>(null);
   const selectedCollectionRef = useRef<Collection | null>(null);
   const userRef = useRef<User | null>(null);
@@ -775,6 +801,92 @@ export default function App() {
     }
   }
 
+  async function loadDocumentationSummary() {
+    if (!token || !workspaceId) return;
+    try {
+      const summary = await api<{
+        title: string;
+        version: string;
+        collection_count: number;
+        folder_count: number;
+        request_count: number;
+      }>(`/workspaces/${workspaceId}/documentation/summary`, {}, token);
+      setDocumentationSummary(summary);
+    } catch (e) {
+      setMessage(
+        e instanceof Error
+          ? e.message
+          : "Could not load documentation summary.",
+      );
+    }
+  }
+
+  async function loadAuditLogs() {
+    if (!token || !workspaceId) return;
+    try {
+      const data = await api<AuditLog[]>(
+        `/workspaces/${workspaceId}/audit-logs?limit=50`,
+        {},
+        token,
+      );
+      setAuditLogs(data);
+    } catch (e) {
+      setAuditLogs([]);
+      setMessage(e instanceof Error ? e.message : "Could not load audit logs.");
+    }
+  }
+
+  async function exportOpenAPI() {
+    if (!token || !workspaceId) return;
+    try {
+      const response = await fetch(
+        `/api/v1/workspaces/${workspaceId}/documentation/openapi.json`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        },
+      );
+      if (!response.ok)
+        throw new Error(`Documentation export failed (${response.status})`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "openapi.json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("OpenAPI document exported.");
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : "Documentation export failed.",
+      );
+    }
+  }
+
+  async function importOpenAPI(file: File) {
+    if (!token || !workspaceId) return;
+    try {
+      const text = await file.text();
+      const spec = JSON.parse(text);
+      const result = await api<{
+        collection_name: string;
+        folder_count: number;
+        request_count: number;
+      }>(
+        `/workspaces/${workspaceId}/documentation/import`,
+        { method: "POST", body: JSON.stringify({ spec }) },
+        token,
+      );
+      await loadCollections(workspaceId, token);
+      await loadDocumentationSummary();
+      setMessage(
+        `Imported ${result.request_count} requests into ${result.collection_name}.`,
+      );
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "OpenAPI import failed.");
+    }
+  }
+
   async function logout() {
     if (token)
       await api("/auth/logout", { method: "POST" }, token).catch(() => {});
@@ -923,9 +1035,77 @@ export default function App() {
             ))}
           </select>
           <button onClick={createEnvironment}>+ Env</button>
+          <button
+            onClick={async () => {
+              setDocumentationOpen(true);
+              await loadDocumentationSummary();
+            }}
+          >
+            Docs
+          </button>
+          <button
+            onClick={async () => {
+              setAuditOpen(true);
+              await loadAuditLogs();
+            }}
+          >
+            Audit
+          </button>
           <button onClick={logout}>Log out</button>
         </div>
       </header>
+      {auditOpen && (
+        <section className="documentation-panel">
+          <div className="section-head">
+            <span>Security Audit Log</span>
+            <button onClick={() => setAuditOpen(false)}>Close</button>
+          </div>
+          {auditLogs.length === 0 ? (
+            <p className="muted">No audit entries are available or you do not have audit-log permission.</p>
+          ) : (
+            <div className="audit-list">
+              {auditLogs.map((log) => (
+                <div className="audit-row" key={log.id}>
+                  <strong>{log.action}</strong>
+                  <span className={`status-badge status-${Math.floor(log.status_code / 100)}xx`}>{log.status_code}</span>
+                  <code>{log.path}</code>
+                  <small>{new Date(log.created_at).toLocaleString()}</small>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+      {documentationOpen && (
+        <section className="documentation-panel">
+          <div className="section-head">
+            <span>API Documentation</span>
+            <button onClick={() => setDocumentationOpen(false)}>Close</button>
+          </div>
+          {documentationSummary && (
+            <p>
+              {documentationSummary.title} · OpenAPI {documentationSummary.version} · {documentationSummary.collection_count} collections · {documentationSummary.request_count} requests
+            </p>
+          )}
+          <div className="documentation-actions">
+            <button onClick={exportOpenAPI}>Export OpenAPI JSON</button>
+            <label className="file-button">
+              Import OpenAPI JSON
+              <input
+                type="file"
+                accept="application/json,.json"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void importOpenAPI(file);
+                  e.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
+          <small>Credentials are never exported. Imported authentication schemes require credentials to be configured separately.</small>
+        </section>
+      )}
       <div className="workspace-grid">
         <aside className="sidebar">
           <div className="section-head">

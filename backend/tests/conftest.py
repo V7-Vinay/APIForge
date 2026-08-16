@@ -8,5 +8,13 @@ def anyio_backend():
 
 @pytest.fixture
 async def client():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            yield ac
+
+from app.core.database import engine
+
+@pytest.fixture(autouse=True)
+async def cleanup_db_connections():
+    yield
+    await engine.dispose()
