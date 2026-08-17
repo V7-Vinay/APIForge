@@ -27,14 +27,15 @@ async function seedUserAndWorkspace(request: APIRequestContext) {
     },
   });
   expect(workspace.status()).toBe(201);
+  const workspaceId = (await workspace.json()).id as string;
 
-  return { email, password };
+  return { email, password, workspaceId };
 }
 
 test("authenticated user can open APIForge workspace UI", async ({ page, request }) => {
-  const { email, password } = await seedUserAndWorkspace(request);
+  const { email, password, workspaceId } = await seedUserAndWorkspace(request);
 
-  await page.goto("/");
+  await page.goto("/login");
   await expect(page.getByText("Your API workspace starts here.")).toBeVisible();
 
   await page.getByLabel("Email").fill(email);
@@ -42,7 +43,12 @@ test("authenticated user can open APIForge workspace UI", async ({ page, request
   await page.getByRole("button", { name: "Log in" }).click();
 
   await expect(page.getByText("APIForge").first()).toBeVisible();
-  await expect(page.getByPlaceholder("Search collections, folders, requests…")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Docs" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Audit" })).toBeVisible();
+  await page.getByRole("button", { name: /E2E Workspace/i }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/workspaces/${workspaceId}`));
+  await expect(
+    page.getByRole("button", { name: /Search collections, folders, requests/i }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Documentation" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit" })).toBeVisible();
 });
